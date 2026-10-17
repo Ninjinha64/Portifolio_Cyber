@@ -30,15 +30,11 @@
 
     form.addEventListener('submit', (e) => {
         e.preventDefault();
-        const nome = (inputNome.value || '').trim() || 'Visitante';
-        sessionStorage.setItem('visitor_name', nome);
-        aplicarSaudacao(nome);
-        modal.classList.add('oculto');
-        enviarLog(nome);
-    });
-
-    btnGuest.addEventListener('click', () => {
-        const nome = 'Convidado (Guest)';
+        const nome = (inputNome.value || '').trim();
+        if (!nome) {
+            inputNome.focus();
+            return;
+        }
         sessionStorage.setItem('visitor_name', nome);
         aplicarSaudacao(nome);
         modal.classList.add('oculto');
