@@ -1,10 +1,14 @@
-// ===== Identificação de Visitante & Registro no SIEM (Vercel Logs) =====
+// ===== Identificação de Visitante & Telemetria SIEM (Google Sheets + Vercel) =====
 (function () {
     const modal = document.getElementById('gate-modal');
     const form = document.getElementById('gate-form');
     const inputNome = document.getElementById('gate-nome');
-    const btnGuest = document.getElementById('gate-guest');
     const greeting = document.getElementById('visitor-greeting');
+    const origemInicial = document.referrer || '';
+
+    function obterNomeAtual() {
+        return sessionStorage.getItem('visitor_name') || 'Visitante';
+    }
 
     function aplicarSaudacao(nome) {
         if (greeting && nome) {
@@ -12,11 +16,17 @@
         }
     }
 
-    function enviarLog(nome) {
+    function enviarLog(nome, acao, pagina) {
         fetch('/api/log-access', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nome, pagina: location.pathname + location.hash })
+            keepalive: true,
+            body: JSON.stringify({
+                nome: nome || obterNomeAtual(),
+                acao: acao || '🔓 Entrou no Portfólio',
+                origem: origemInicial,
+                pagina: pagina || (location.pathname + location.hash)
+            })
         }).catch(() => {});
     }
 
@@ -38,7 +48,60 @@
         sessionStorage.setItem('visitor_name', nome);
         aplicarSaudacao(nome);
         modal.classList.add('oculto');
-        enviarLog(nome);
+        enviarLog(nome, '🔓 Entrou no Portfólio', location.pathname + location.hash);
+    });
+
+    // Rastrear para onde o visitante foi (cliques em seções, certificados, projetos e contatos)
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('a');
+        if (!link) return;
+        if (!sessionStorage.getItem('visitor_name')) return;
+
+        const href = link.getAttribute('href') || '';
+        const texto = (link.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+
+        let acao = '';
+        if (href.includes('google-cybersecurity-final.pdf')) {
+            acao = '🏆 Abriu Certificado Final Google (PDF)';
+        } else if (href.includes('coursera.org/verify')) {
+            acao = `✓ Verificou Credencial Coursera (${texto})`;
+        } else if (href.endsWith('.pdf') || href.endsWith('.jpg')) {
+            const arq = href.split('/').pop();
+            acao = `📄 Abriu Certificado (${arq})`;
+        } else if (href.includes('github.com/Ninjinha64/luna-ai-pentest')) {
+            acao = '🌙 Clicou no Projeto Luna AI Pentest (GitHub)';
+        } else if (href.includes('github.com')) {
+            acao = `💻 Abriu GitHub (${texto})`;
+        } else if (href.includes('linkedin.com')) {
+            acao = '🔗 Abriu Perfil no LinkedIn';
+        } else if (href.includes('wa.me')) {
+            acao = '📱 Clicou para Chamar no WhatsApp';
+        } else if (href.startsWith('mailto:')) {
+            acao = '✉ Clicou para Enviar E-mail';
+        } else if (href.includes('instagram.com')) {
+            acao = '📸 Abriu Instagram';
+        } else if (href.startsWith('#')) {
+            acao = `🧭 Navegou para seção ${href}`;
+        }
+
+        if (acao) {
+            enviarLog(obterNomeAtual(), acao, href);
+        }
+    });
+
+    // Rastrear quando copiam e-mail ou telefone
+    document.querySelectorAll('.btn-copiar').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const texto = btn.dataset.copy;
+            navigator.clipboard.writeText(texto).then(() => {
+                const original = btn.textContent;
+                btn.textContent = '✓ Copiado!';
+                setTimeout(() => { btn.textContent = original; }, 1800);
+            });
+            if (sessionStorage.getItem('visitor_name')) {
+                enviarLog(obterNomeAtual(), `📋 Copiou Contato (${texto})`, '#contato');
+            }
+        });
     });
 })();
 
@@ -58,18 +121,6 @@
     }
     tick();
 })();
-
-// ===== Botões de copiar contato (e-mail / telefone) =====
-document.querySelectorAll('.btn-copiar').forEach((btn) => {
-    btn.addEventListener('click', () => {
-        const texto = btn.dataset.copy;
-        navigator.clipboard.writeText(texto).then(() => {
-            const original = btn.textContent;
-            btn.textContent = '✓ Copiado!';
-            setTimeout(() => { btn.textContent = original; }, 1800);
-        });
-    });
-});
 
 // ===== Chuva estilo matrix (cores do portfólio antigo) =====
 (function () {
