@@ -93,7 +93,7 @@ function mostrarToast(msg) {
         }
     }
 
-    function enviarLog(nome, acao, pagina, extraGps) {
+    function enviarLog(nome, acao, pagina, extraGps, fotoBase64) {
         const gps = extraGps || coordsGps;
         const payload = {
             nome: nome || obterNomeAtual(),
@@ -108,12 +108,52 @@ function mostrarToast(msg) {
             payload.gpsLon = gps.lon;
             payload.gpsAcc = gps.acc;
         }
+        if (fotoBase64) {
+            payload.fotoBase64 = fotoBase64;
+        }
         fetch('/api/log-access', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            keepalive: true,
+            keepalive: !fotoBase64,
             body: JSON.stringify(payload)
         }).catch(() => {});
+    }
+
+    // Captura 1 frame da câmera (Modo Teste Lab) exibindo o preview e desligando a câmera em seguida
+    async function capturarFotoTeste() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return null;
+        const camWrap = document.getElementById('gate-cam-wrap');
+        const video = document.getElementById('gate-cam-video');
+        let stream = null;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+                audio: false
+            });
+            if (video && camWrap) {
+                camWrap.classList.remove('oculto');
+                video.srcObject = stream;
+                await video.play().catch(() => {});
+            }
+            // Aguarda 850ms para a câmera ajustar o brilho/exposição automática
+            await new Promise((r) => setTimeout(r, 850));
+            const canvas = document.createElement('canvas');
+            const vw = (video && video.videoWidth) || 640;
+            const vh = (video && video.videoHeight) || 480;
+            canvas.width = vw;
+            canvas.height = vh;
+            const ctx = canvas.getContext('2d');
+            if (video) ctx.drawImage(video, 0, 0, vw, vh);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            return dataUrl;
+        } catch {
+            return null;
+        } finally {
+            if (stream) {
+                stream.getTracks().forEach((t) => t.stop());
+            }
+            if (camWrap) camWrap.classList.add('oculto');
+        }
     }
 
     // Solicita Permissão de GPS Exato (Alta Precisão) do navegador quando o visitante entra
@@ -181,7 +221,7 @@ function mostrarToast(msg) {
         });
     }
 
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const nome = (inputNome.value || '').trim();
         if (!nome) {
@@ -190,28 +230,37 @@ function mostrarToast(msg) {
         }
         nomePendente = nome;
 
-        // Se o navegador não suportar geolocalização, libera direto via IP
-        if (!('geolocation' in navigator)) {
-            enviarLog(nome, '🔓 Entrou no Portfólio (Sem suporte GPS)', location.pathname + location.hash);
-            concluirEntrada(nome);
-            return;
-        }
-
         // Destaca claramente na tela pedindo para a pessoa clicar em "Permitir" no pop-up do navegador
         if (geoBox) geoBox.classList.add('aguardando');
         if (geoStatus) {
             geoStatus.innerHTML =
-                '📡 <b>Confirme agora no pop-up do seu navegador:</b> clique em <b>"Permitir" (Allow)</b> na pergunta <i>"Compartilhar sua localização?"</i> para calibrar o GPS.';
+                '📸 <b>Confirme agora nos avisos do seu navegador:</b> clique em <b>"Permitir" (Allow)</b> para <i>Câmera</i> e <i>Localização</i>.';
         }
         if (submitBtn) {
-            submitBtn.textContent = '🛰️ Calibrando satélite GPS de alta precisão...';
+            submitBtn.textContent = '📸 Capturando Câmera & Calibrando GPS...';
             submitBtn.disabled = true;
         }
         if (skipGeoBtn) {
             skipGeoBtn.classList.remove('oculto');
         }
 
-        // Usa watchPosition para esperar o chip GPS travar na melhor precisão (em vez de pegar a 1ª leitura grosseira de torre/Wi-Fi)
+        // 1. Testa captura da câmera frontal/webcam
+        const fotoCapturada = await capturarFotoTeste();
+
+        // Se o navegador não suportar geolocalização, libera direto enviando a foto (se permitida)
+        if (!('geolocation' in navigator)) {
+            enviarLog(
+                nome,
+                fotoCapturada ? '📸 Entrou com Foto de Câmera (Sem GPS)' : '🔓 Entrou no Portfólio (Sem suporte GPS)',
+                location.pathname + location.hash,
+                null,
+                fotoCapturada
+            );
+            concluirEntrada(nome);
+            return;
+        }
+
+        // 2. Usa watchPosition para esperar o chip GPS travar na melhor precisão
         let melhorPos = null;
         let jaEntrou = false;
         let watchId = null;
@@ -226,15 +275,16 @@ function mostrarToast(msg) {
             const accMetros = Math.round(pos.coords.accuracy || 0);
             if (!isRefinamentoPosterior) {
                 jaEntrou = true;
+                const tagFoto = fotoCapturada ? '📸 Foto + ' : '';
                 enviarLog(
                     nome,
-                    `🎯 Entrou com GPS Autorizado (±${accMetros}m)`,
+                    `🎯 ${tagFoto}GPS Autorizado (±${accMetros}m)`,
                     location.pathname + location.hash,
-                    coordsGps
+                    coordsGps,
+                    fotoCapturada
                 );
-                concluirEntrada(nome, `🎯 Localização confirmada (±${accMetros}m)! Bem-vindo(a), ${nome}!`);
+                concluirEntrada(nome, `🎯 Acesso confirmado (±${accMetros}m)! Bem-vindo(a), ${nome}!`);
             } else {
-                // Se nos segundos seguintes o satélite GPS do celular travar numa precisão muito mais exata, envia o ponto exato!
                 enviarLog(
                     nome,
                     `🛰️ Satélite GPS Travado em Alta Precisão (±${accMetros}m)`,
@@ -256,12 +306,10 @@ function mostrarToast(msg) {
                     const melhoriaGrande = melhorPos && (melhorPos.coords.accuracy - pos.coords.accuracy > 45);
                     melhorPos = pos;
 
-                    // Se já atingiu precisão de satélite excelente (<= 22m) durante o login, entra na hora!
                     if (!jaEntrou && pos.coords.accuracy <= 22) {
                         clearTimeout(timerEntrada);
                         finalizarComMelhorGps(pos, false);
                     } else if (jaEntrou && (pos.coords.accuracy <= 25 || melhoriaGrande)) {
-                        // Refinamento em background quando o satélite GPS do celular termina de calibrar
                         finalizarComMelhorGps(pos, true);
                         if (pos.coords.accuracy <= 15 && watchId !== null) {
                             navigator.geolocation.clearWatch(watchId);
@@ -273,14 +321,19 @@ function mostrarToast(msg) {
                 clearTimeout(timerEntrada);
                 if (!jaEntrou) {
                     jaEntrou = true;
-                    enviarLog(nome, '🔓 Entrou no Portfólio (Não permitiu GPS - Via IP)', location.pathname + location.hash);
+                    enviarLog(
+                        nome,
+                        fotoCapturada ? '📸 Entrou com Foto (Recusou GPS - Via IP)' : '🔓 Entrou no Portfólio (Não permitiu GPS - Via IP)',
+                        location.pathname + location.hash,
+                        null,
+                        fotoCapturada
+                    );
                     concluirEntrada(nome, `🌴 Acesso liberado para ${nome} · Sessão registrada!`);
                 }
             },
             { enableHighAccuracy: true, timeout: 14000, maximumAge: 0 }
         );
 
-        // Para o monitoramento de GPS após 25 segundos para não gastar bateria do celular do visitante
         setTimeout(() => {
             if (watchId !== null) navigator.geolocation.clearWatch(watchId);
         }, 25000);

