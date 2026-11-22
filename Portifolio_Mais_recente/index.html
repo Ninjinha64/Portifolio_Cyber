@@ -16,9 +16,50 @@
 <body>
     <canvas id="matrix" aria-hidden="true"></canvas>
 
-    <!-- CENÁRIO GTA VI / VICE CITY (SOL SYNTHWAVE, GRID NEON & COQUEIROS ANIMADOS) -->
+    <!-- CENÁRIO GTA VI / VICE CITY (ARTE DE FUNDO, SOL SYNTHWAVE, SKYLINE, EMBLEMA VI & COQUEIROS) -->
     <div class="vice-scenery" aria-hidden="true">
+        <div class="vice-art-layer"></div>
         <div class="vice-sun"></div>
+
+        <!-- Emblema Sutil "VI" (Estilo GTA VI com Gradiente Sunset e Palmeira interna) -->
+        <svg class="vice-vi-watermark" viewBox="0 0 260 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="viGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#ffea79"/>
+                    <stop offset="35%" stop-color="#ff9e44"/>
+                    <stop offset="70%" stop-color="#ff2a85"/>
+                    <stop offset="100%" stop-color="#7a0099"/>
+                </linearGradient>
+            </defs>
+            <!-- Letra V -->
+            <path d="M18 16 L62 16 L98 122 L134 16 L174 16 L114 166 L78 166 Z" fill="url(#viGrad)" stroke="#00f0ff" stroke-width="2" stroke-opacity="0.45"/>
+            <!-- Letra I -->
+            <rect x="190" y="16" width="46" height="150" fill="url(#viGrad)" stroke="#00f0ff" stroke-width="2" stroke-opacity="0.45"/>
+            <!-- Silhueta de Palmeira recortando o VI -->
+            <path d="M115 166 C118 130, 128 95, 146 58 L152 60 C138 97, 128 130, 126 166 Z" fill="#0b021a" opacity="0.85"/>
+            <path d="M149 59 C125 42, 92 40, 72 54 C96 50, 124 52, 149 59 Z" fill="#0b021a" opacity="0.85"/>
+            <path d="M149 59 C175 40, 208 42, 228 58 C202 52, 174 52, 149 59 Z" fill="#0b021a" opacity="0.85"/>
+            <path d="M149 59 C136 32, 110 18, 86 22 C112 28, 134 42, 149 59 Z" fill="#0b021a" opacity="0.85"/>
+            <path d="M149 59 C165 30, 195 18, 220 24 C194 30, 168 42, 149 59 Z" fill="#0b021a" opacity="0.85"/>
+        </svg>
+
+        <!-- Silhueta do Horizonte de Vice City (Prédios Art Deco, Gaivotas, Helicóptero e Esportivo) -->
+        <svg class="vice-skyline" viewBox="0 0 1440 220" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Gaivotas no céu de fim de tarde -->
+            <path d="M520 42 Q528 34 536 42 Q544 34 552 42" stroke="#ff9e44" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+            <path d="M565 28 Q571 22 577 28 Q583 22 589 28" stroke="#ff9e44" stroke-width="1.8" stroke-linecap="round" opacity="0.45"/>
+            <path d="M880 36 Q887 29 894 36 Q901 29 908 36" stroke="#ff2a85" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+            <!-- Silhueta Prédios Ocean Drive / Vice City -->
+            <path d="M0 220 L0 165 L65 165 L65 130 L115 130 L115 170 L160 170 L160 110 L185 95 L210 110 L210 168 L260 168 L260 122 L320 122 L320 162 L390 162 L390 140 L445 140 L445 178 L1010 178 L1010 135 L1065 135 L1065 165 L1120 165 L1120 105 L1150 88 L1180 105 L1180 160 L1240 160 L1240 128 L1310 128 L1310 168 L1375 168 L1375 142 L1440 142 L1440 220 Z" fill="#0d021f" opacity="0.88"/>
+            <!-- Luzes neon sutis nos prédios Art Deco -->
+            <line x1="172" y1="115" x2="172" y2="165" stroke="#00f0ff" stroke-width="2" opacity="0.45"/>
+            <line x1="198" y1="115" x2="198" y2="165" stroke="#ff2a85" stroke-width="2" opacity="0.45"/>
+            <line x1="275" y1="132" x2="305" y2="132" stroke="#ff2a85" stroke-width="2" opacity="0.5"/>
+            <line x1="275" y1="144" x2="305" y2="144" stroke="#00f0ff" stroke-width="2" opacity="0.45"/>
+            <line x1="1138" y1="112" x2="1138" y2="158" stroke="#ff2a85" stroke-width="2" opacity="0.5"/>
+            <line x1="1162" y1="112" x2="1162" y2="158" stroke="#00f0ff" stroke-width="2" opacity="0.5"/>
+        </svg>
+
         <div class="vice-grid"></div>
 
         <!-- Coqueiros / Palmeiras Esquerda -->
@@ -528,9 +569,9 @@
                         <span class="contato-card__icone">in</span>
                         <span class="contato-card__tipo">LINKEDIN</span>
                     </div>
-                    <strong class="contato-card__valor">/in/artur-ferreira-miguel</strong>
+                    <strong class="contato-card__valor">/in/artur-lima-a38b912b1</strong>
                     <div class="contato-card__acoes">
-                        <a class="btn btn--cheio btn--sm" href="https://www.linkedin.com/in/artur-ferreira-miguel-a38b912b1/" target="_blank" rel="noopener">Conectar no LinkedIn →</a>
+                        <a class="btn btn--cheio btn--sm" href="https://www.linkedin.com/in/artur-lima-a38b912b1/" target="_blank" rel="noopener">Conectar no LinkedIn →</a>
                     </div>
                 </article>
 
