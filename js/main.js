@@ -1,18 +1,21 @@
-// ===== Identificação de Visitante & Telemetria SIEM (Google Sheets + Vercel) =====
+// ===== Identificação de Visitante & Telemetria Vice SIEM (Zero Escape + Sessão + Cliques) =====
 (function () {
     const modal = document.getElementById('gate-modal');
     const form = document.getElementById('gate-form');
     const inputNome = document.getElementById('gate-nome');
     const greeting = document.getElementById('visitor-greeting');
     const origemInicial = document.referrer || '';
+    const inicioSessao = Date.now();
+    let totalInteracoes = 0;
+    let saidaEnviada = false;
 
     function obterNomeAtual() {
-        return sessionStorage.getItem('visitor_name') || 'Visitante';
+        return sessionStorage.getItem('visitor_name') || 'Visitante (Na tela de login)';
     }
 
     function aplicarSaudacao(nome) {
         if (greeting && nome) {
-            greeting.textContent = `$ session --user "${nome}" [SIEM LOGGED]`;
+            greeting.textContent = `$ session --user "${nome}" [VICE SIEM LOGGED]`;
         }
     }
 
@@ -36,6 +39,11 @@
         aplicarSaudacao(salvo);
     } else {
         setTimeout(() => inputNome && inputNome.focus(), 150);
+        // 1. Automação Zero Escape: Registra que alguém abriu a página antes mesmo de digitar o nome!
+        if (!sessionStorage.getItem('zero_escape_logged')) {
+            sessionStorage.setItem('zero_escape_logged', '1');
+            enviarLog('Não identificado (Abriu o site)', '👀 Abriu a Tela Inicial (Zero Escape)', location.pathname + location.hash);
+        }
     }
 
     form.addEventListener('submit', (e) => {
@@ -48,14 +56,14 @@
         sessionStorage.setItem('visitor_name', nome);
         aplicarSaudacao(nome);
         modal.classList.add('oculto');
-        enviarLog(nome, '🔓 Entrou no Portfólio', location.pathname + location.hash);
+        totalInteracoes++;
+        enviarLog(nome, '🔓 Entrou no Portfólio (Autenticado)', location.pathname + location.hash);
     });
 
-    // Rastrear para onde o visitante foi (cliques em seções, certificados, projetos e contatos)
+    // 2. Rastrear para onde o visitante foi (cliques em seções, certificados, projetos e contatos)
     document.addEventListener('click', (e) => {
         const link = e.target.closest('a');
         if (!link) return;
-        if (!sessionStorage.getItem('visitor_name')) return;
 
         const href = link.getAttribute('href') || '';
         const texto = (link.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60);
@@ -85,6 +93,7 @@
         }
 
         if (acao) {
+            totalInteracoes++;
             enviarLog(obterNomeAtual(), acao, href);
         }
     });
@@ -98,11 +107,74 @@
                 btn.textContent = '✓ Copiado!';
                 setTimeout(() => { btn.textContent = original; }, 1800);
             });
-            if (sessionStorage.getItem('visitor_name')) {
-                enviarLog(obterNomeAtual(), `📋 Copiou Contato (${texto})`, '#contato');
-            }
+            totalInteracoes++;
+            enviarLog(obterNomeAtual(), `📋 Copiou Contato (${texto})`, '#contato');
         });
     });
+
+    // 3. Automação de Tempo de Sessão (registra quanto tempo a pessoa ficou ao fechar/sair da aba)
+    function registrarSaida() {
+        if (saidaEnviada) return;
+        const segundos = Math.round((Date.now() - inicioSessao) / 1000);
+        if (segundos < 3) return;
+        saidaEnviada = true;
+        const min = Math.floor(segundos / 60);
+        const seg = segundos % 60;
+        const tempoFmt = min > 0 ? `${min}m ${seg}s` : `${seg}s`;
+        enviarLog(
+            obterNomeAtual(),
+            `⏱️ Encerrou Sessão (Tempo: ${tempoFmt} · Cliques: ${totalInteracoes})`,
+            location.pathname + location.hash
+        );
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') registrarSaida();
+    });
+    window.addEventListener('pagehide', registrarSaida);
+})();
+
+// ===== Alternador de Tema (GTA VI Vice City <-> Clássico Oliva) =====
+(function () {
+    const btnTema = document.getElementById('theme-toggle');
+    if (!btnTema) return;
+
+    function atualizarTextoBotao() {
+        const isClassico = document.body.classList.contains('tema-classico');
+        btnTema.textContent = isClassico ? '🟢 Modo Clássico' : '🌴 Modo Vice City';
+    }
+
+    if (localStorage.getItem('portfolio_tema') === 'classico') {
+        document.body.classList.add('tema-classico');
+        atualizarTextoBotao();
+    }
+
+    btnTema.addEventListener('click', () => {
+        document.body.classList.toggle('tema-classico');
+        const isClassico = document.body.classList.contains('tema-classico');
+        localStorage.setItem('portfolio_tema', isClassico ? 'classico' : 'vice');
+        atualizarTextoBotao();
+    });
+})();
+
+// ===== Automação GitHub Auto-Sync (@Ninjinha64 em tempo real) =====
+(function () {
+    const statsEl = document.getElementById('github-stats');
+    if (!statsEl) return;
+
+    Promise.all([
+        fetch('https://api.github.com/users/Ninjinha64').then((r) => (r.ok ? r.json() : null)),
+        fetch('https://api.github.com/users/Ninjinha64/repos?sort=updated&per_page=3').then((r) => (r.ok ? r.json() : null))
+    ])
+        .then(([user, repos]) => {
+            if (!user || !Array.isArray(repos)) return;
+            const ultimoRepo = repos[0] ? repos[0].name : 'Portifolio_Cyber';
+            statsEl.innerHTML =
+                `<span>📦 Repositórios Públicos: <b>${user.public_repos}</b></span>` +
+                `<span>⚡ Último Atualizado: <b>${ultimoRepo}</b></span>` +
+                `<span>🟢 Status API: <b>Online</b></span>`;
+        })
+        .catch(() => {});
 })();
 
 // ===== Efeito digitação =====
@@ -122,11 +194,12 @@
     tick();
 })();
 
-// ===== Chuva estilo matrix (cores do portfólio antigo) =====
+// ===== Chuva estilo Matrix (Cores Neon GTA VI Vice City / Clássico) =====
 (function () {
     const canvas = document.getElementById('matrix');
     const ctx = canvas.getContext('2d');
-    const chars = '01ABCDEF<>/{}[]#$%&*+=';
+    const chars = '01ABCDEF<>/{}[]#$%&*+=VICE6';
+    const coresVice = ['#ff2a85', '#00f0ff', '#ff9e44', '#d946ef'];
     const tam = 16;
     let gotas = [];
 
@@ -141,11 +214,12 @@
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     setInterval(() => {
-        ctx.fillStyle = 'rgba(12, 17, 10, .12)';
+        const isClassico = document.body.classList.contains('tema-classico');
+        ctx.fillStyle = isClassico ? 'rgba(12, 17, 10, .14)' : 'rgba(11, 2, 26, .16)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#A4B465';
         ctx.font = tam + 'px monospace';
         gotas.forEach((y, i) => {
+            ctx.fillStyle = isClassico ? '#A4B465' : coresVice[i % coresVice.length];
             ctx.fillText(chars[Math.floor(Math.random() * chars.length)], i * tam, y * tam);
             gotas[i] = y * tam > canvas.height && Math.random() > .975 ? 0 : y + 1;
         });
