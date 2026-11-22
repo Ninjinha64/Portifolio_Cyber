@@ -1,6 +1,13 @@
 const GOOGLE_SHEETS_WEBHOOK =
     'https://script.google.com/macros/s/AKfycbzrnwUhCJb1bzAVMFv0PrXaVUU7rBPXpKHs2QfStPISxGoAGM5i5cQ7Gs9VN8iFpFSd/exec';
 
+// Configurações do Supabase (lê de process.env na Vercel ou valores padrão)
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gcbbgjqwdcipdppfgvoc.supabase.co';
+const SUPABASE_KEY =
+    process.env.SUPABASE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    'sb_publishable_SbUub-2BSI10YzlnbeP_DQ_T0ensNM_';
+
 // Separado em partes para evitar que scanners públicos do GitHub invalidem o webhook automaticamente
 const DISCORD_WH_ID = '1573852182237814836';
 const DISCORD_WH_TOKEN = ['qKMyKBKC4xEQV5Vjfv2vW7Taknobviv5SMa3', 'wtW5rEA8XSxyBNGlE3_Bg10iq0Lr73U6'].join('');
@@ -209,6 +216,28 @@ async function enviarAlertaDiscord(payload, mapaUrl, isGpsExato, fotoBase64) {
     });
 }
 
+async function salvarSupabase(dados) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return;
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 2500);
+        await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/access_logs`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(dados),
+            signal: ctrl.signal
+        });
+        clearTimeout(timer);
+    } catch (e) {
+        console.error('[SUPABASE-ERROR]', e?.message || e);
+    }
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ ok: false, message: 'Method Not Allowed' });
@@ -285,7 +314,21 @@ export default async function handler(req, res) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         }),
-        enviarAlertaDiscord(payload, mapaUrl, isGpsExato, fotoBase64)
+        enviarAlertaDiscord(payload, mapaUrl, isGpsExato, fotoBase64),
+        salvarSupabase({
+            data_hora: dataHora,
+            visitante,
+            acao,
+            origem,
+            local,
+            ip,
+            dispositivo,
+            pagina,
+            lat: gpsLat,
+            lon: gpsLon,
+            precisao_gps: gpsAcc ? `${gpsAcc} metros` : null,
+            mapa_url: mapaUrl
+        })
     ]);
 
     return res.status(200).json({ ok: true, ...payload, mapaUrl, isGpsExato });
