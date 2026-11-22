@@ -8,7 +8,7 @@ function mostrarToast(msg) {
     toast._timer = setTimeout(() => toast.classList.remove('ativo'), 3200);
 }
 
-// ===== Identificação de Visitante & Telemetria Vice SIEM (Zero Escape + Sessão + Cliques) =====
+// ===== Identificação de Visitante & Telemetria Vice SIEM (Fingerprint Anti-Fake + Zero Escape + Sessão) =====
 (function () {
     const modal = document.getElementById('gate-modal');
     const form = document.getElementById('gate-form');
@@ -19,13 +19,76 @@ function mostrarToast(msg) {
     let totalInteracoes = 0;
     let saidaEnviada = false;
 
+    // Gera Impressão Digital Única do Aparelho (Device Fingerprint) + Hardware Real (GPU / Tela / Modelo)
+    function coletarAssinaturaDispositivo() {
+        let gpu = '';
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (gl) {
+                const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+                if (dbg) {
+                    const rawGpu = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '';
+                    gpu = rawGpu
+                        .replace(/ANGLE\s*\(([^,]+),\s*([^,]+).*?\)/i, '$2')
+                        .replace(/OpenGL.*$/i, '')
+                        .replace(/Direct3D.*$/i, '')
+                        .trim()
+                        .slice(0, 34);
+                }
+            }
+        } catch {}
+
+        const w = Math.min(window.screen.width, window.screen.height);
+        const h = Math.max(window.screen.width, window.screen.height);
+        const dpr = window.devicePixelRatio || 1;
+        const tela = `${window.screen.width}x${window.screen.height}`;
+        const cores = navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency}c` : '';
+        const ram = navigator.deviceMemory ? `${navigator.deviceMemory}GB` : '';
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        const lang = navigator.language || '';
+
+        // Estimar modelo de iPhone pela resolução física + DPR (já que a Apple oculta o modelo no User-Agent)
+        let modeloIphone = '';
+        if (/iPhone/i.test(navigator.userAgent)) {
+            const key = `${w}x${h}@${dpr}`;
+            const mapaIphone = {
+                '440x956@3': 'iPhone 16 Pro Max',
+                '402x874@3': 'iPhone 16 Pro',
+                '430x932@3': 'iPhone 14/15/16 Plus ou Pro Max',
+                '393x852@3': 'iPhone 14 Pro / 15 / 16',
+                '390x844@3': 'iPhone 12 / 13 / 14',
+                '428x926@3': 'iPhone 12/13 Pro Max ou 14 Plus',
+                '375x812@3': 'iPhone X / XS / 11 Pro / Mini',
+                '414x896@2': 'iPhone XR / 11',
+                '414x896@3': 'iPhone XS Max / 11 Pro Max',
+                '375x667@2': 'iPhone SE / 7 / 8'
+            };
+            modeloIphone = mapaIphone[key] || `iPhone (${tela})`;
+        }
+
+        // Hash curto determinístico do aparelho (mesmo se a pessoa mentir o nome, o ID #XXXX continua igual!)
+        const rawFp = [navigator.userAgent, tela, dpr, gpu, cores, ram, tz, lang, navigator.platform].join('|');
+        let hash = 2166136261;
+        for (let i = 0; i < rawFp.length; i++) {
+            hash ^= rawFp.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        const fpId = 'ID:' + (hash >>> 0).toString(16).toUpperCase().padStart(8, '0').slice(0, 6);
+
+        const hwPartes = [modeloIphone || gpu, tela, [cores, ram].filter(Boolean).join('/')].filter(Boolean);
+        return { fp: fpId, hw: hwPartes.join(' · ') };
+    }
+
+    const assinatura = coletarAssinaturaDispositivo();
+
     function obterNomeAtual() {
-        return sessionStorage.getItem('visitor_name') || 'Visitante (Na tela de login)';
+        return sessionStorage.getItem('visitor_name') || 'Não identificado';
     }
 
     function aplicarSaudacao(nome) {
         if (greeting && nome) {
-            greeting.textContent = `$ session --user "${nome}" [VICE SIEM LOGGED]`;
+            greeting.textContent = `$ session --user "${nome}" [${assinatura.fp}]`;
         }
     }
 
@@ -36,6 +99,8 @@ function mostrarToast(msg) {
             keepalive: true,
             body: JSON.stringify({
                 nome: nome || obterNomeAtual(),
+                fp: assinatura.fp,
+                hw: assinatura.hw,
                 acao: acao || '🔓 Entrou no Portfólio',
                 origem: origemInicial,
                 pagina: pagina || (location.pathname + location.hash)
