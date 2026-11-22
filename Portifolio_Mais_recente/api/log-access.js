@@ -42,16 +42,51 @@ function tratarOrigem(ref = '') {
     }
 }
 
+async function consultarOsintIp(ip) {
+    if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1') {
+        return { isp: 'Rede Local', vpnFlag: '' };
+    }
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 1800);
+        const r = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, { signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!r.ok) return { isp: '', vpnFlag: '' };
+        const d = await r.json();
+        const org = d?.connection?.org || d?.connection?.isp || '';
+        const asn = d?.connection?.asn ? `AS${d.connection.asn}` : '';
+        const isCloudOrVpn = /cloudflare|amazonaws|digitalocean|linode|ovh|hetzner|choopa|vultr|m247|vpn|proxy|hosting|datacenter|microsoft|google cloud/i.test(org);
+        const vpnFlag = isCloudOrVpn ? ' ⚠️ [Possível VPN/Cloud]' : '';
+        const isp = [org, asn].filter(Boolean).join(' · ') + vpnFlag;
+        return { isp, vpnFlag };
+    } catch {
+        return { isp: '', vpnFlag: '' };
+    }
+}
+
 async function enviarAlertaDiscord(payload) {
     const url = `https://discord.com/api/webhooks/${DISCORD_WH_ID}/${DISCORD_WH_TOKEN}`;
+    const isSilencioso = payload.acao.includes('Abriu a Tela');
+    const isSaida = payload.acao.includes('Encerrou Sessão');
     const isEntrada = payload.acao.includes('Entrou') || payload.acao.includes('Ativada');
-    const corViceCity = isEntrada ? 0xff2a85 : 0x00f0ff; // Hot Pink na entrada, Electric Cyan nos cliques
+
+    // Cores GTA 6 Vice City: Hot Pink (Entrada), Sunset Orange (Abriu Tela / Saiu), Electric Cyan (Cliques)
+    let corViceCity = 0x00f0ff;
+    if (isEntrada) corViceCity = 0xff2a85;
+    else if (isSilencioso || isSaida) corViceCity = 0xff9e44;
+
+    let headline = `⚡ **Atividade registrada:** \`${payload.visitante}\` → **${payload.acao}**`;
+    if (isEntrada) {
+        headline = `🚨 **Visitante autenticado no Portfólio!** (\`${payload.visitante}\` — \`${payload.local}\`)`;
+    } else if (isSilencioso) {
+        headline = `👁️ **Novo visitante abriu o site (Zero Escape)!** (\`${payload.local}\` — \`${payload.ip}\`)`;
+    } else if (isSaida) {
+        headline = `⏱️ **Fim de sessão:** \`${payload.visitante}\` → **${payload.acao}**`;
+    }
 
     const discordBody = {
         username: '🌴 VICE SIEM // Cyber Alert',
-        content: isEntrada
-            ? `🚨 **Novo acesso detectado no Portfólio!** (\`${payload.visitante}\` — \`${payload.local}\`)`
-            : `⚡ **Atividade registrada:** \`${payload.visitante}\` → **${payload.acao}**`,
+        content: headline,
         embeds: [
             {
                 title: '🌴 VICE SIEM // GTA VI CYBER TELEMETRY',
@@ -60,7 +95,7 @@ async function enviarAlertaDiscord(payload) {
                 fields: [
                     { name: '👤 Visitante / Empresa', value: `**${payload.visitante}**`, inline: true },
                     { name: '⚡ Ação / Onde Foi', value: `**${payload.acao}**`, inline: true },
-                    { name: '🛡️ Endereço IP', value: `\`${payload.ip}\``, inline: true },
+                    { name: '🛡️ Endereço IP & Rede (OSINT)', value: `\`${payload.ip}\``, inline: true },
                     { name: '📍 Cidade / Estado / País', value: payload.local, inline: true },
                     { name: '🌐 Origem (De onde veio)', value: payload.origem, inline: true },
                     { name: '💻 Dispositivo & Sistema', value: payload.dispositivo, inline: true },
@@ -92,13 +127,16 @@ export default async function handler(req, res) {
     const referrer = (body.origem || req.headers['referer'] || '').toString();
 
     const rawIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
-    const ip = rawIp.split(',')[0].trim();
+    const ipLimpo = rawIp.split(',')[0].trim();
 
     const cidade = req.headers['x-vercel-ip-city'] ? decodeURIComponent(req.headers['x-vercel-ip-city']) : '';
     const estado = req.headers['x-vercel-ip-country-region'] || '';
     const pais = req.headers['x-vercel-ip-country'] || '';
     const localPartes = [cidade, estado].filter(Boolean).join(' - ');
     const local = [localPartes, pais].filter(Boolean).join(' / ') || 'Não identificado';
+
+    const { isp } = await consultarOsintIp(ipLimpo);
+    const ip = isp ? `${ipLimpo} (${isp})` : ipLimpo;
 
     const ua = req.headers['user-agent'] || '';
     const dispositivo = tratarDispositivo(ua);
