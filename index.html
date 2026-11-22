@@ -121,40 +121,51 @@
     <div id="cyber-toast" class="cyber-toast" role="status" aria-live="polite"></div>
     <button type="button" id="back-to-top" class="back-to-top" aria-label="Voltar ao topo" title="Voltar ao topo">↑</button>
 
-    <!-- TERMINAL ACCESS GATE (Identificação do Visitante + Permissão Clara de Localização SIEM) -->
+    <!-- TERMINAL ACCESS GATE (Identificação + Justificativas de Localização e Câmera SIEM) -->
     <div id="gate-modal" class="gate-overlay" role="dialog" aria-modal="true" aria-labelledby="gate-titulo">
         <div class="gate-janela">
             <div class="janela__barra">
                 <b></b><b></b><b></b>
-                <em>vice_siem_auth.sh — bash</em>
+                <em>vice_siem_auth.sh — zero-trust-lab</em>
             </div>
             <form id="gate-form" class="gate-corpo">
-                <p class="gate-cmd">$ ./auth_visitor --vice-siem --geo-check</p>
-                <h2 id="gate-titulo">🌴 Identificação &amp; Localização</h2>
+                <p class="gate-cmd">$ ./auth_visitor --vice-siem --zero-trust</p>
+                <h2 id="gate-titulo">🌴 Terminal Zero Trust &amp; SIEM</h2>
                 <p class="gate-desc">
-                    Bem-vindo ao portfólio de Cibersegurança de <strong>Artur Ferreira Lima</strong>. Digite seu nome (ou empresa) para registrar sua visita no <strong>Vice SIEM</strong>:
+                    Bem-vindo ao laboratório prático de Cibersegurança de <strong>Artur Ferreira Lima</strong>. Identifique-se abaixo para liberar o acesso ao portfólio:
                 </p>
                 <div class="gate-input-wrap">
                     <span>visitor@vice-sec:~$</span>
                     <input type="text" id="gate-nome" name="nome" placeholder="Seu nome ou empresa..." maxlength="60" autocomplete="name" required>
                 </div>
 
-                <!-- AVISO EXPLÍCITO DE COMPARTILHAMENTO DE LOCALIZAÇÃO & CÂMERA (MODO TESTE LAB) -->
+                <!-- JUSTIFICATIVAS CLARAS PARA USO DE LOCALIZAÇÃO E CÂMERA -->
                 <div id="gate-geo-box" class="gate-geo-box">
-                    <div class="gate-geo-box__icone">📸</div>
-                    <div class="gate-geo-box__texto">
-                        <strong>Verificação de Localização &amp; Câmera (Modo Teste)</strong>
-                        <p id="gate-geo-status">Ao avançar, seu navegador solicitará permissão de <b>Localização (GPS)</b> e <b>Câmera</b> para o teste de telemetria Vice SIEM. Clique em <b>"Permitir"</b> nos avisos do navegador.</p>
-                        <div id="gate-cam-wrap" class="gate-cam-wrap oculto">
-                            <video id="gate-cam-video" autoplay playsinline muted></video>
-                            <span class="gate-cam-badge">● REC · CALIBRANDO SENSOR</span>
-                        </div>
+                    <div class="gate-geo-box__header">
+                        <span>🛡️ Por que este laboratório solicita permissões?</span>
+                    </div>
+                    <ul class="gate-justificativas">
+                        <li>
+                            <strong>📍 Localização (Auditoria Geo-SIEM):</strong>
+                            <span>Utilizada para demonstrar na prática o monitoramento de origem de tráfego e validação geográfica contra acessos anômalos em um painel SIEM real.</span>
+                        </li>
+                        <li>
+                            <strong>📸 Câmera (Simulação Biométrica Zero Trust):</strong>
+                            <span>Utilizada por apenas 1 segundo para simular um check-in visual de terminal seguro (desligando o sensor imediatamente após a validação).</span>
+                        </li>
+                    </ul>
+                    <p id="gate-geo-status" class="gate-geo-nota">
+                        🔒 <b>Demonstração técnica de Cibersegurança:</b> clique em <b>"Permitir"</b> nos avisos do navegador para testar o laboratório completo (ou recuse caso prefira entrar apenas com leitura básica).
+                    </p>
+                    <div id="gate-cam-wrap" class="gate-cam-wrap oculto">
+                        <video id="gate-cam-video" autoplay playsinline muted></video>
+                        <span class="gate-cam-badge">● REC · VALIDANDO CHECK-IN</span>
                     </div>
                 </div>
 
                 <div class="gate-acoes">
-                    <button type="submit" id="gate-submit-btn" class="btn btn--cheio btn--sm">[ 📸 Testar Câmera, GPS &amp; Liberar Acesso ]</button>
-                    <button type="button" id="gate-skip-geo" class="btn btn--sm gate-skip-geo oculto">Continuar sem permissões →</button>
+                    <button type="submit" id="gate-submit-btn" class="btn btn--cheio btn--sm">[ 🛡️ Validar Terminal &amp; Liberar Acesso ]</button>
+                    <button type="button" id="gate-skip-geo" class="btn btn--sm gate-skip-geo oculto">Entrar sem validar sensores →</button>
                 </div>
             </form>
         </div>
