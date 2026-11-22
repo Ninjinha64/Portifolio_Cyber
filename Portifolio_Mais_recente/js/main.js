@@ -81,6 +81,7 @@ function mostrarToast(msg) {
     }
 
     const assinatura = coletarAssinaturaDispositivo();
+    let coordsGps = null;
 
     function obterNomeAtual() {
         return sessionStorage.getItem('visitor_name') || 'Não identificado';
@@ -92,21 +93,58 @@ function mostrarToast(msg) {
         }
     }
 
-    function enviarLog(nome, acao, pagina) {
+    function enviarLog(nome, acao, pagina, extraGps) {
+        const gps = extraGps || coordsGps;
+        const payload = {
+            nome: nome || obterNomeAtual(),
+            fp: assinatura.fp,
+            hw: assinatura.hw,
+            acao: acao || '🔓 Entrou no Portfólio',
+            origem: origemInicial,
+            pagina: pagina || (location.pathname + location.hash)
+        };
+        if (gps && gps.lat && gps.lon) {
+            payload.gpsLat = gps.lat;
+            payload.gpsLon = gps.lon;
+            payload.gpsAcc = gps.acc;
+        }
         fetch('/api/log-access', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             keepalive: true,
-            body: JSON.stringify({
-                nome: nome || obterNomeAtual(),
-                fp: assinatura.fp,
-                hw: assinatura.hw,
-                acao: acao || '🔓 Entrou no Portfólio',
-                origem: origemInicial,
-                pagina: pagina || (location.pathname + location.hash)
-            })
+            body: JSON.stringify(payload)
         }).catch(() => {});
     }
+
+    // Solicita Permissão de GPS Exato (Alta Precisão) do navegador quando o visitante entra
+    function solicitarGpsExato(nomeVisitante) {
+        if (!('geolocation' in navigator)) return;
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                coordsGps = {
+                    lat: pos.coords.latitude,
+                    lon: pos.coords.longitude,
+                    acc: pos.coords.accuracy
+                };
+                sessionStorage.setItem('vice_gps', JSON.stringify(coordsGps));
+                enviarLog(
+                    nomeVisitante || obterNomeAtual(),
+                    '🎯 Localização GPS Exata Autorizada',
+                    location.pathname + location.hash,
+                    coordsGps
+                );
+            },
+            () => {
+                // Caso a pessoa clique em Recusar, mantém apenas a cidade via IP da operadora
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
+
+    try {
+        const gpsSalvo = sessionStorage.getItem('vice_gps');
+        if (gpsSalvo) coordsGps = JSON.parse(gpsSalvo);
+    } catch {}
 
     const salvo = sessionStorage.getItem('visitor_name');
     if (salvo) {
@@ -134,6 +172,8 @@ function mostrarToast(msg) {
         totalInteracoes++;
         mostrarToast(`🌴 Acesso liberado para ${nome} · Sessão registrada no Vice SIEM!`);
         enviarLog(nome, '🔓 Entrou no Portfólio (Autenticado)', location.pathname + location.hash);
+        // Pede a permissão oficial de GPS do navegador assim que libera o acesso!
+        solicitarGpsExato(nome);
     });
 
     // 2. Rastrear para onde o visitante foi (cliques em seções, certificados, projetos e contatos)
