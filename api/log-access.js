@@ -5,25 +5,31 @@ const GOOGLE_SHEETS_WEBHOOK =
 const DISCORD_WH_ID = '1573852182237814836';
 const DISCORD_WH_TOKEN = ['qKMyKBKC4xEQV5Vjfv2vW7Taknobviv5SMa3', 'wtW5rEA8XSxyBNGlE3_Bg10iq0Lr73U6'].join('');
 
-function tratarDispositivo(ua = '') {
+function tratarDispositivo(ua = '', hwInfo = '') {
     const tipo = /Mobi|Android|iPhone|iPad/i.test(ua) ? 'Celular' : 'PC / Desktop';
 
     let so = 'SO Desconhecido';
     if (/Windows NT 10\.0/i.test(ua)) so = 'Windows 10/11';
     else if (/Windows/i.test(ua)) so = 'Windows';
-    else if (/Android/i.test(ua)) so = 'Android';
-    else if (/iPhone|iPad|iPod/i.test(ua)) so = 'iOS (iPhone/iPad)';
-    else if (/Mac OS X/i.test(ua)) so = 'macOS';
+    else if (/Android/i.test(ua)) {
+        const m = ua.match(/Android\s+([\d.]+)/i);
+        so = m ? `Android ${m[1]}` : 'Android';
+    } else if (/iPhone|iPad|iPod/i.test(ua)) {
+        const m = ua.match(/OS\s+([\d_]+)/i);
+        so = m ? `iOS ${m[1].replace(/_/g, '.')}` : 'iOS (iPhone/iPad)';
+    } else if (/Mac OS X/i.test(ua)) so = 'macOS';
     else if (/Linux/i.test(ua)) so = 'Linux';
 
     let nav = 'Navegador';
     if (/Edg\//i.test(ua)) nav = 'Edge';
     else if (/OPR\/|Opera/i.test(ua)) nav = 'Opera';
+    else if (/CriOS\//i.test(ua)) nav = 'Chrome (iOS)';
     else if (/Chrome\//i.test(ua)) nav = 'Chrome';
-    else if (/Firefox\//i.test(ua)) nav = 'Firefox';
+    else if (/FxiOS\/|Firefox\//i.test(ua)) nav = 'Firefox';
     else if (/Safari\//i.test(ua)) nav = 'Safari';
 
-    return `${tipo} · ${so} · ${nav}`;
+    const base = `${tipo} · ${so} · ${nav}`;
+    return hwInfo ? `${base} · ${hwInfo}` : base;
 }
 
 function tratarOrigem(ref = '') {
@@ -44,33 +50,42 @@ function tratarOrigem(ref = '') {
 
 async function consultarOsintIp(ip) {
     if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1') {
-        return { isp: 'Rede Local', vpnFlag: '' };
+        return { isp: 'Rede Local', lat: '', lon: '', cidadeOsint: '', estadoOsint: '', paisOsint: '' };
     }
     try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 1800);
         const r = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, { signal: ctrl.signal });
         clearTimeout(timer);
-        if (!r.ok) return { isp: '', vpnFlag: '' };
+        if (!r.ok) return { isp: '', lat: '', lon: '', cidadeOsint: '', estadoOsint: '', paisOsint: '' };
         const d = await r.json();
         const org = d?.connection?.org || d?.connection?.isp || '';
         const asn = d?.connection?.asn ? `AS${d.connection.asn}` : '';
-        const isCloudOrVpn = /cloudflare|amazonaws|digitalocean|linode|ovh|hetzner|choopa|vultr|m247|vpn|proxy|hosting|datacenter|microsoft|google cloud/i.test(org);
+        const isCloudOrVpn =
+            /cloudflare|amazonaws|digitalocean|linode|ovh|hetzner|choopa|vultr|m247|vpn|proxy|hosting|datacenter|microsoft|google cloud/i.test(
+                org
+            );
         const vpnFlag = isCloudOrVpn ? ' ⚠️ [Possível VPN/Cloud]' : '';
         const isp = [org, asn].filter(Boolean).join(' · ') + vpnFlag;
-        return { isp, vpnFlag };
+        return {
+            isp,
+            lat: d?.latitude ? String(d.latitude) : '',
+            lon: d?.longitude ? String(d.longitude) : '',
+            cidadeOsint: d?.city || '',
+            estadoOsint: d?.region_code || d?.region || '',
+            paisOsint: d?.country_code || ''
+        };
     } catch {
-        return { isp: '', vpnFlag: '' };
+        return { isp: '', lat: '', lon: '', cidadeOsint: '', estadoOsint: '', paisOsint: '' };
     }
 }
 
-async function enviarAlertaDiscord(payload) {
+async function enviarAlertaDiscord(payload, mapaUrl) {
     const url = `https://discord.com/api/webhooks/${DISCORD_WH_ID}/${DISCORD_WH_TOKEN}`;
     const isSilencioso = payload.acao.includes('Abriu a Tela');
     const isSaida = payload.acao.includes('Encerrou Sessão');
     const isEntrada = payload.acao.includes('Entrou') || payload.acao.includes('Ativada');
 
-    // Cores GTA 6 Vice City: Hot Pink (Entrada), Sunset Orange (Abriu Tela / Saiu), Electric Cyan (Cliques)
     let corViceCity = 0x00f0ff;
     if (isEntrada) corViceCity = 0xff2a85;
     else if (isSilencioso || isSaida) corViceCity = 0xff9e44;
@@ -84,6 +99,8 @@ async function enviarAlertaDiscord(payload) {
         headline = `⏱️ **Fim de sessão:** \`${payload.visitante}\` → **${payload.acao}**`;
     }
 
+    const localComMapa = mapaUrl ? `${payload.local} · [📍 Ver no Google Maps](${mapaUrl})` : payload.local;
+
     const discordBody = {
         username: '🌴 VICE SIEM // Cyber Alert',
         content: headline,
@@ -93,12 +110,12 @@ async function enviarAlertaDiscord(payload) {
                 url: 'https://docs.google.com/spreadsheets/d/1Qcw6NdhO9N1rKB69_sGot-62IHl6ojfXc6JOiD0TtDk/edit',
                 color: corViceCity,
                 fields: [
-                    { name: '👤 Visitante / Empresa', value: `**${payload.visitante}**`, inline: true },
+                    { name: '👤 Visitante + ID Único (Anti-Fake)', value: `**${payload.visitante}**`, inline: true },
                     { name: '⚡ Ação / Onde Foi', value: `**${payload.acao}**`, inline: true },
-                    { name: '🛡️ Endereço IP & Rede (OSINT)', value: `\`${payload.ip}\``, inline: true },
-                    { name: '📍 Cidade / Estado / País', value: payload.local, inline: true },
+                    { name: '🛡️ Endereço IP & Operadora', value: `\`${payload.ip}\``, inline: true },
+                    { name: '📍 Localização & Mapa', value: localComMapa, inline: true },
                     { name: '🌐 Origem (De onde veio)', value: payload.origem, inline: true },
-                    { name: '💻 Dispositivo & Sistema', value: payload.dispositivo, inline: true },
+                    { name: '💻 Aparelho Real / GPU / Tela', value: payload.dispositivo, inline: true },
                     { name: '🔗 Rota / Destino', value: `\`${payload.pagina}\``, inline: false }
                 ],
                 footer: {
@@ -121,7 +138,11 @@ export default async function handler(req, res) {
     }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const visitante = (body.nome || 'Visitante').toString().slice(0, 80);
+    const nomeDigitado = (body.nome || 'Visitante').toString().slice(0, 65);
+    const fingerprint = (body.fp || '').toString().slice(0, 20);
+    const hwInfo = (body.hw || '').toString().slice(0, 90);
+    const visitante = fingerprint ? `${nomeDigitado} [${fingerprint}]` : nomeDigitado;
+
     const acao = (body.acao || '🔓 Entrou no Portfólio').toString().slice(0, 120);
     const pagina = (body.pagina || '/').toString().slice(0, 140);
     const referrer = (body.origem || req.headers['referer'] || '').toString();
@@ -129,17 +150,25 @@ export default async function handler(req, res) {
     const rawIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
     const ipLimpo = rawIp.split(',')[0].trim();
 
-    const cidade = req.headers['x-vercel-ip-city'] ? decodeURIComponent(req.headers['x-vercel-ip-city']) : '';
-    const estado = req.headers['x-vercel-ip-country-region'] || '';
-    const pais = req.headers['x-vercel-ip-country'] || '';
-    const localPartes = [cidade, estado].filter(Boolean).join(' - ');
-    const local = [localPartes, pais].filter(Boolean).join(' / ') || 'Não identificado';
+    const osint = await consultarOsintIp(ipLimpo);
 
-    const { isp } = await consultarOsintIp(ipLimpo);
-    const ip = isp ? `${ipLimpo} (${isp})` : ipLimpo;
+    const cidade =
+        (req.headers['x-vercel-ip-city'] ? decodeURIComponent(req.headers['x-vercel-ip-city']) : '') ||
+        osint.cidadeOsint;
+    const estado = req.headers['x-vercel-ip-country-region'] || osint.estadoOsint || '';
+    const pais = req.headers['x-vercel-ip-country'] || osint.paisOsint || '';
+    const lat = req.headers['x-vercel-ip-latitude'] || osint.lat || '';
+    const lon = req.headers['x-vercel-ip-longitude'] || osint.lon || '';
+
+    const localPartes = [cidade, estado].filter(Boolean).join(' - ');
+    const coordsTxt = lat && lon ? ` (${Number(lat).toFixed(3)}, ${Number(lon).toFixed(3)})` : '';
+    const local = ([localPartes, pais].filter(Boolean).join(' / ') || 'Não identificado') + coordsTxt;
+    const mapaUrl = lat && lon ? `https://www.google.com/maps?q=${lat},${lon}` : '';
+
+    const ip = osint.isp ? `${ipLimpo} (${osint.isp})` : ipLimpo;
 
     const ua = req.headers['user-agent'] || '';
-    const dispositivo = tratarDispositivo(ua);
+    const dispositivo = tratarDispositivo(ua, hwInfo);
     const origem = tratarOrigem(referrer);
     const dataHora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
@@ -164,8 +193,8 @@ export default async function handler(req, res) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         }),
-        enviarAlertaDiscord(payload)
+        enviarAlertaDiscord(payload, mapaUrl)
     ]);
 
-    return res.status(200).json({ ok: true, ...payload });
+    return res.status(200).json({ ok: true, ...payload, mapaUrl });
 }
