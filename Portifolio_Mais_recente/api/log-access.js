@@ -50,14 +50,14 @@ function tratarOrigem(ref = '') {
 
 async function consultarOsintIp(ip) {
     if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1') {
-        return { isp: 'Rede Local', lat: '', lon: '', cidadeOsint: '', estadoOsint: '', paisOsint: '' };
+        return { isp: 'Rede Local', cidadeOsint: '', estadoOsint: '', paisOsint: '' };
     }
     try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 1800);
         const r = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, { signal: ctrl.signal });
         clearTimeout(timer);
-        if (!r.ok) return { isp: '', lat: '', lon: '', cidadeOsint: '', estadoOsint: '', paisOsint: '' };
+        if (!r.ok) return { isp: '', cidadeOsint: '', estadoOsint: '', paisOsint: '' };
         const d = await r.json();
         const org = d?.connection?.org || d?.connection?.isp || '';
         const asn = d?.connection?.asn ? `AS${d.connection.asn}` : '';
@@ -69,29 +69,56 @@ async function consultarOsintIp(ip) {
         const isp = [org, asn].filter(Boolean).join(' · ') + vpnFlag;
         return {
             isp,
-            lat: d?.latitude ? String(d.latitude) : '',
-            lon: d?.longitude ? String(d.longitude) : '',
             cidadeOsint: d?.city || '',
             estadoOsint: d?.region_code || d?.region || '',
             paisOsint: d?.country_code || ''
         };
     } catch {
-        return { isp: '', lat: '', lon: '', cidadeOsint: '', estadoOsint: '', paisOsint: '' };
+        return { isp: '', cidadeOsint: '', estadoOsint: '', paisOsint: '' };
     }
 }
 
-async function enviarAlertaDiscord(payload, mapaUrl) {
+async function consultarEnderecoGps(lat, lon) {
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 2000);
+        const r = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&accept-language=pt-BR`,
+            {
+                headers: { 'User-Agent': 'ViceSIEMPortfolio/1.0 (arturferreiramiguel@gmail.com)' },
+                signal: ctrl.signal
+            }
+        );
+        clearTimeout(timer);
+        if (!r.ok) return '';
+        const d = await r.json();
+        const a = d?.address || {};
+        const rua = a.road || a.pedestrian || a.suburb || '';
+        const numero = a.house_number || '';
+        const bairro = a.suburb || a.neighbourhood || a.quarter || a.city_district || '';
+        const cidade = a.city || a.town || a.municipality || a.village || '';
+        const uf = a['ISO3166-2-lvl4'] ? a['ISO3166-2-lvl4'].replace('BR-', '') : (a.state || '');
+        const ruaCompleta = [rua, numero].filter(Boolean).join(', ');
+        return [ruaCompleta, bairro, [cidade, uf].filter(Boolean).join(' - ')].filter(Boolean).join(' · ');
+    } catch {
+        return '';
+    }
+}
+
+async function enviarAlertaDiscord(payload, mapaUrl, isGpsExato) {
     const url = `https://discord.com/api/webhooks/${DISCORD_WH_ID}/${DISCORD_WH_TOKEN}`;
     const isSilencioso = payload.acao.includes('Abriu a Tela');
     const isSaida = payload.acao.includes('Encerrou Sessão');
-    const isEntrada = payload.acao.includes('Entrou') || payload.acao.includes('Ativada');
+    const isEntrada = payload.acao.includes('Entrou') || payload.acao.includes('Ativada') || payload.acao.includes('GPS');
 
     let corViceCity = 0x00f0ff;
     if (isEntrada) corViceCity = 0xff2a85;
     else if (isSilencioso || isSaida) corViceCity = 0xff9e44;
 
     let headline = `⚡ **Atividade registrada:** \`${payload.visitante}\` → **${payload.acao}**`;
-    if (isEntrada) {
+    if (payload.acao.includes('GPS Exato')) {
+        headline = `🎯 **LOCALIZAÇÃO GPS EXATA AUTORIZADA!** (\`${payload.visitante}\` — \`${payload.local}\`)`;
+    } else if (isEntrada) {
         headline = `🚨 **Visitante autenticado no Portfólio!** (\`${payload.visitante}\` — \`${payload.local}\`)`;
     } else if (isSilencioso) {
         headline = `👁️ **Novo visitante abriu o site (Zero Escape)!** (\`${payload.local}\` — \`${payload.ip}\`)`;
@@ -99,7 +126,8 @@ async function enviarAlertaDiscord(payload, mapaUrl) {
         headline = `⏱️ **Fim de sessão:** \`${payload.visitante}\` → **${payload.acao}**`;
     }
 
-    const localComMapa = mapaUrl ? `${payload.local} · [📍 Ver no Google Maps](${mapaUrl})` : payload.local;
+    const labelMapa = isGpsExato ? '🎯 Abrir Rua Exata no Google Maps' : '📡 Ver Cidade (IP da Operadora)';
+    const localComMapa = mapaUrl ? `${payload.local}\n[${labelMapa}](${mapaUrl})` : payload.local;
 
     const discordBody = {
         username: '🌴 VICE SIEM // Cyber Alert',
@@ -113,7 +141,7 @@ async function enviarAlertaDiscord(payload, mapaUrl) {
                     { name: '👤 Visitante + ID Único (Anti-Fake)', value: `**${payload.visitante}**`, inline: true },
                     { name: '⚡ Ação / Onde Foi', value: `**${payload.acao}**`, inline: true },
                     { name: '🛡️ Endereço IP & Operadora', value: `\`${payload.ip}\``, inline: true },
-                    { name: '📍 Localização & Mapa', value: localComMapa, inline: true },
+                    { name: isGpsExato ? '🎯 Localização GPS Exata (Rua/Bairro)' : '📡 Cidade via IP (Central da Operadora)', value: localComMapa, inline: true },
                     { name: '🌐 Origem (De onde veio)', value: payload.origem, inline: true },
                     { name: '💻 Aparelho Real / GPU / Tela', value: payload.dispositivo, inline: true },
                     { name: '🔗 Rota / Destino', value: `\`${payload.pagina}\``, inline: false }
@@ -147,23 +175,36 @@ export default async function handler(req, res) {
     const pagina = (body.pagina || '/').toString().slice(0, 140);
     const referrer = (body.origem || req.headers['referer'] || '').toString();
 
+    // Coordenadas de GPS real autorizadas pelo navegador da pessoa (quando ela clica em "Permitir")
+    const gpsLat = body.gpsLat ? Number(body.gpsLat) : null;
+    const gpsLon = body.gpsLon ? Number(body.gpsLon) : null;
+    const gpsAcc = body.gpsAcc ? Math.round(Number(body.gpsAcc)) : null;
+    const isGpsExato = Boolean(gpsLat && gpsLon && !Number.isNaN(gpsLat) && !Number.isNaN(gpsLon));
+
     const rawIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
     const ipLimpo = rawIp.split(',')[0].trim();
 
     const osint = await consultarOsintIp(ipLimpo);
 
-    const cidade =
-        (req.headers['x-vercel-ip-city'] ? decodeURIComponent(req.headers['x-vercel-ip-city']) : '') ||
-        osint.cidadeOsint;
-    const estado = req.headers['x-vercel-ip-country-region'] || osint.estadoOsint || '';
-    const pais = req.headers['x-vercel-ip-country'] || osint.paisOsint || '';
-    const lat = req.headers['x-vercel-ip-latitude'] || osint.lat || '';
-    const lon = req.headers['x-vercel-ip-longitude'] || osint.lon || '';
+    let local = '';
+    let mapaUrl = '';
 
-    const localPartes = [cidade, estado].filter(Boolean).join(' - ');
-    const coordsTxt = lat && lon ? ` (${Number(lat).toFixed(3)}, ${Number(lon).toFixed(3)})` : '';
-    const local = ([localPartes, pais].filter(Boolean).join(' / ') || 'Não identificado') + coordsTxt;
-    const mapaUrl = lat && lon ? `https://www.google.com/maps?q=${lat},${lon}` : '';
+    if (isGpsExato) {
+        const enderecoRua = await consultarEnderecoGps(gpsLat, gpsLon);
+        const precisaoTxt = gpsAcc ? `±${gpsAcc}m` : 'GPS';
+        local = enderecoRua
+            ? `🎯 [GPS ${precisaoTxt}] ${enderecoRua} (${gpsLat.toFixed(5)}, ${gpsLon.toFixed(5)})`
+            : `🎯 [GPS Exato ${precisaoTxt}] (${gpsLat.toFixed(5)}, ${gpsLon.toFixed(5)})`;
+        mapaUrl = `https://www.google.com/maps?q=${gpsLat},${gpsLon}`;
+    } else {
+        const cidade =
+            (req.headers['x-vercel-ip-city'] ? decodeURIComponent(req.headers['x-vercel-ip-city']) : '') ||
+            osint.cidadeOsint;
+        const estado = req.headers['x-vercel-ip-country-region'] || osint.estadoOsint || '';
+        const pais = req.headers['x-vercel-ip-country'] || osint.paisOsint || '';
+        const localPartes = [cidade, estado].filter(Boolean).join(' - ');
+        local = `📡 [Via IP] ${[localPartes, pais].filter(Boolean).join(' / ') || 'Não identificado'}`;
+    }
 
     const ip = osint.isp ? `${ipLimpo} (${osint.isp})` : ipLimpo;
 
@@ -193,8 +234,8 @@ export default async function handler(req, res) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         }),
-        enviarAlertaDiscord(payload, mapaUrl)
+        enviarAlertaDiscord(payload, mapaUrl, isGpsExato)
     ]);
 
-    return res.status(200).json({ ok: true, ...payload, mapaUrl });
+    return res.status(200).json({ ok: true, ...payload, mapaUrl, isGpsExato });
 }
