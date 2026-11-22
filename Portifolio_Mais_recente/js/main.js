@@ -587,16 +587,17 @@ function mostrarToast(msg) {
     tick();
 })();
 
-// ===== Chuva estilo Matrix (Cores Neon GTA VI Vice City / Clássico) =====
+// ===== Chuva estilo Matrix (Cores Neon GTA VI Vice City / Clássico — Otimizada para Mobile) =====
 (function () {
     const canvas = document.getElementById('matrix');
     const ctx = canvas.getContext('2d');
     const chars = '01ABCDEF<>/{}[]#$%&*+=VICE6';
     const coresVice = ['#ff2a85', '#00f0ff', '#ff9e44', '#d946ef'];
-    const tam = 16;
+    let tam = innerWidth < 768 ? 22 : 16;
     let gotas = [];
 
     function ajustar() {
+        tam = innerWidth < 768 ? 22 : 16;
         canvas.width = innerWidth;
         canvas.height = innerHeight;
         gotas = Array(Math.floor(canvas.width / tam)).fill(1);
@@ -606,9 +607,10 @@ function mostrarToast(msg) {
 
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
+    const intervalo = innerWidth < 768 ? 85 : 60;
     setInterval(() => {
         const isClassico = document.body.classList.contains('tema-classico');
-        ctx.fillStyle = isClassico ? 'rgba(12, 17, 10, .14)' : 'rgba(11, 2, 26, .16)';
+        ctx.fillStyle = isClassico ? 'rgba(12, 17, 10, .16)' : 'rgba(11, 2, 26, .18)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.font = tam + 'px monospace';
         gotas.forEach((y, i) => {
@@ -616,5 +618,5 @@ function mostrarToast(msg) {
             ctx.fillText(chars[Math.floor(Math.random() * chars.length)], i * tam, y * tam);
             gotas[i] = y * tam > canvas.height && Math.random() > .975 ? 0 : y + 1;
         });
-    }, 60);
+    }, intervalo);
 })();
