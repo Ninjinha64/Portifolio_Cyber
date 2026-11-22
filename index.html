@@ -121,7 +121,7 @@
     <div id="cyber-toast" class="cyber-toast" role="status" aria-live="polite"></div>
     <button type="button" id="back-to-top" class="back-to-top" aria-label="Voltar ao topo" title="Voltar ao topo">↑</button>
 
-    <!-- TERMINAL ACCESS GATE (Identificação do Visitante + Log SIEM) -->
+    <!-- TERMINAL ACCESS GATE (Identificação do Visitante + Permissão Clara de Localização SIEM) -->
     <div id="gate-modal" class="gate-overlay" role="dialog" aria-modal="true" aria-labelledby="gate-titulo">
         <div class="gate-janela">
             <div class="janela__barra">
@@ -129,17 +129,28 @@
                 <em>vice_siem_auth.sh — bash</em>
             </div>
             <form id="gate-form" class="gate-corpo">
-                <p class="gate-cmd">$ ./auth_visitor --vice-siem</p>
-                <h2 id="gate-titulo">🌴 Identificação de Acesso</h2>
+                <p class="gate-cmd">$ ./auth_visitor --vice-siem --geo-check</p>
+                <h2 id="gate-titulo">🌴 Identificação &amp; Localização</h2>
                 <p class="gate-desc">
-                    Bem-vindo ao portfólio de Cibersegurança de <strong>Artur Ferreira Lima</strong>. Digite seu nome (ou empresa) para liberar o terminal e registrar sua visita no <strong>Vice SIEM</strong>:
+                    Bem-vindo ao portfólio de Cibersegurança de <strong>Artur Ferreira Lima</strong>. Digite seu nome (ou empresa) para registrar sua visita no <strong>Vice SIEM</strong>:
                 </p>
                 <div class="gate-input-wrap">
                     <span>visitor@vice-sec:~$</span>
                     <input type="text" id="gate-nome" name="nome" placeholder="Seu nome ou empresa..." maxlength="60" autocomplete="name" required>
                 </div>
+
+                <!-- AVISO EXPLÍCITO DE COMPARTILHAMENTO DE LOCALIZAÇÃO -->
+                <div id="gate-geo-box" class="gate-geo-box">
+                    <div class="gate-geo-box__icone">📍</div>
+                    <div class="gate-geo-box__texto">
+                        <strong>Compartilhar sua localização?</strong>
+                        <p id="gate-geo-status">Ao avançar, seu navegador (iPhone, Android ou PC) perguntará se deseja compartilhar sua localização atual. Clique em <b>"Permitir"</b> no aviso do navegador.</p>
+                    </div>
+                </div>
+
                 <div class="gate-acoes">
-                    <button type="submit" class="btn btn--cheio btn--sm">[ Liberar Acesso ]</button>
+                    <button type="submit" id="gate-submit-btn" class="btn btn--cheio btn--sm">[ 📍 Compartilhar Localização &amp; Liberar Acesso ]</button>
+                    <button type="button" id="gate-skip-geo" class="btn btn--sm gate-skip-geo oculto">Continuar sem compartilhar localização →</button>
                 </div>
             </form>
         </div>
