@@ -2,8 +2,11 @@ const GOOGLE_SHEETS_WEBHOOK =
     'https://script.google.com/macros/s/AKfycbzrnwUhCJb1bzAVMFv0PrXaVUU7rBPXpKHs2QfStPISxGoAGM5i5cQ7Gs9VN8iFpFSd/exec';
 
 // Configurações do Supabase (lê de process.env na Vercel ou valores padrão)
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gcbbgjqwdcipdppfgvoc.supabase.co';
+const SUPABASE_KEY =
+    process.env.SUPABASE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    'sb_publishable_SbUub-2BSI10YzlnbeP_DQ_T0ensNM_';
 
 // Separado em partes para evitar que scanners públicos do GitHub invalidem o webhook automaticamente
 const DISCORD_WH_ID = '1573852182237814836';
