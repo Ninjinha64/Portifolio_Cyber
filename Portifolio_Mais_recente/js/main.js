@@ -159,6 +159,28 @@ function mostrarToast(msg) {
         }
     }
 
+    const geoBox = document.getElementById('gate-geo-box');
+    const geoStatus = document.getElementById('gate-geo-status');
+    const submitBtn = document.getElementById('gate-submit-btn');
+    const skipGeoBtn = document.getElementById('gate-skip-geo');
+    let nomePendente = '';
+
+    function concluirEntrada(nome, msgToast) {
+        sessionStorage.setItem('visitor_name', nome);
+        aplicarSaudacao(nome);
+        modal.classList.add('oculto');
+        totalInteracoes++;
+        mostrarToast(msgToast || `🌴 Acesso liberado para ${nome} · Sessão registrada no Vice SIEM!`);
+    }
+
+    if (skipGeoBtn) {
+        skipGeoBtn.addEventListener('click', () => {
+            const nome = nomePendente || (inputNome.value || '').trim() || 'Visitante';
+            enviarLog(nome, '🔓 Entrou no Portfólio (Recusou/Pulou GPS)', location.pathname + location.hash);
+            concluirEntrada(nome, `🌴 Acesso liberado para ${nome} (Localização via IP)`);
+        });
+    }
+
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         const nome = (inputNome.value || '').trim();
@@ -166,14 +188,52 @@ function mostrarToast(msg) {
             inputNome.focus();
             return;
         }
-        sessionStorage.setItem('visitor_name', nome);
-        aplicarSaudacao(nome);
-        modal.classList.add('oculto');
-        totalInteracoes++;
-        mostrarToast(`🌴 Acesso liberado para ${nome} · Sessão registrada no Vice SIEM!`);
-        enviarLog(nome, '🔓 Entrou no Portfólio (Autenticado)', location.pathname + location.hash);
-        // Pede a permissão oficial de GPS do navegador assim que libera o acesso!
-        solicitarGpsExato(nome);
+        nomePendente = nome;
+
+        // Se o navegador não suportar geolocalização, libera direto via IP
+        if (!('geolocation' in navigator)) {
+            enviarLog(nome, '🔓 Entrou no Portfólio (Sem suporte GPS)', location.pathname + location.hash);
+            concluirEntrada(nome);
+            return;
+        }
+
+        // Destaca claramente na tela pedindo para a pessoa clicar em "Permitir" no pop-up do navegador
+        if (geoBox) geoBox.classList.add('aguardando');
+        if (geoStatus) {
+            geoStatus.innerHTML =
+                '📡 <b>Confirme agora no pop-up do seu navegador:</b> clique em <b>"Permitir" (Allow)</b> na pergunta <i>"Compartilhar sua localização?"</i> para entrar.';
+        }
+        if (submitBtn) {
+            submitBtn.textContent = '⏳ Aguardando permissão de localização...';
+            submitBtn.disabled = true;
+        }
+        if (skipGeoBtn) {
+            skipGeoBtn.classList.remove('oculto');
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                coordsGps = {
+                    lat: pos.coords.latitude,
+                    lon: pos.coords.longitude,
+                    acc: pos.coords.accuracy
+                };
+                sessionStorage.setItem('vice_gps', JSON.stringify(coordsGps));
+                enviarLog(
+                    nome,
+                    '🎯 Entrou com Localização GPS Exata Autorizada',
+                    location.pathname + location.hash,
+                    coordsGps
+                );
+                concluirEntrada(nome, `🎯 Localização confirmada! Bem-vindo(a), ${nome}!`);
+            },
+            () => {
+                // Se a pessoa clicou em "Bloquear/Não Permitir" no pop-up do navegador, entra registrando via IP
+                enviarLog(nome, '🔓 Entrou no Portfólio (Não permitiu GPS - Via IP)', location.pathname + location.hash);
+                concluirEntrada(nome, `🌴 Acesso liberado para ${nome} · Sessão registrada!`);
+            },
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
     });
 
     // 2. Rastrear para onde o visitante foi (cliques em seções, certificados, projetos e contatos)
