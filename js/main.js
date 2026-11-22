@@ -1,3 +1,13 @@
+// ===== Toast Cyber de Feedback UX =====
+function mostrarToast(msg) {
+    const toast = document.getElementById('cyber-toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add('ativo');
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => toast.classList.remove('ativo'), 3200);
+}
+
 // ===== Identificação de Visitante & Telemetria Vice SIEM (Zero Escape + Sessão + Cliques) =====
 (function () {
     const modal = document.getElementById('gate-modal');
@@ -57,6 +67,7 @@
         aplicarSaudacao(nome);
         modal.classList.add('oculto');
         totalInteracoes++;
+        mostrarToast(`🌴 Acesso liberado para ${nome} · Sessão registrada no Vice SIEM!`);
         enviarLog(nome, '🔓 Entrou no Portfólio (Autenticado)', location.pathname + location.hash);
     });
 
@@ -105,6 +116,7 @@
             navigator.clipboard.writeText(texto).then(() => {
                 const original = btn.textContent;
                 btn.textContent = '✓ Copiado!';
+                mostrarToast(`📋 Copiado para a área de transferência: ${texto}`);
                 setTimeout(() => { btn.textContent = original; }, 1800);
             });
             totalInteracoes++;
@@ -154,7 +166,120 @@
         const isClassico = document.body.classList.contains('tema-classico');
         localStorage.setItem('portfolio_tema', isClassico ? 'classico' : 'vice');
         atualizarTextoBotao();
+        mostrarToast(isClassico ? '🟢 Tema Clássico (Verde Oliva) ativado!' : '🌴 Tema GTA VI / Vice City ativado!');
     });
+})();
+
+// ===== Animações de UX: Scroll Reveal, Decodificação Cyber, Spotlight 3D e ScrollSpy =====
+(function () {
+    // 1. Efeito Hacker Scramble / Decodificação nos títulos de seção
+    const glyphs = '01ABCDEF#$%&*<>/_';
+    function decodificarTexto(el) {
+        if (el.dataset.animando === '1') return;
+        const spanNum = el.querySelector('span');
+        const prefixo = spanNum ? spanNum.outerHTML + ' ' : '';
+        const textoAlvo = (el.dataset.original || el.textContent.replace(/^0\d\.\s*/, '')).trim();
+        el.dataset.original = textoAlvo;
+        el.dataset.animando = '1';
+
+        let iter = 0;
+        const timer = setInterval(() => {
+            const parcial = textoAlvo
+                .split('')
+                .map((ch, idx) => {
+                    if (ch === ' ') return ' ';
+                    if (idx < iter) return textoAlvo[idx];
+                    return glyphs[Math.floor(Math.random() * glyphs.length)];
+                })
+                .join('');
+            el.innerHTML = prefixo + parcial;
+            iter += 1.2;
+            if (iter >= textoAlvo.length) {
+                clearInterval(timer);
+                el.innerHTML = prefixo + textoAlvo;
+                el.dataset.animando = '0';
+            }
+        }, 28);
+    }
+
+    document.querySelectorAll('.secao__titulo').forEach((t) => {
+        t.addEventListener('mouseenter', () => decodificarTexto(t));
+    });
+
+    // 2. Scroll Reveal em cascata para cards, janelas, certificados e títulos
+    const elementosReveal = document.querySelectorAll(
+        '.secao__titulo, .janela, .card, .contato-card, .google-spotlight, .comptia-banner, .github-sync-bar, .subtitulo-log, .log li'
+    );
+    elementosReveal.forEach((el, idx) => {
+        el.classList.add('reveal');
+        const delay = (idx % 6) * 55;
+        el.style.setProperty('--delay', `${delay}ms`);
+    });
+
+    if ('IntersectionObserver' in window) {
+        const io = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visivel');
+                        if (entry.target.classList.contains('secao__titulo')) {
+                            decodificarTexto(entry.target);
+                        }
+                        io.unobserve(entry.target);
+                    }
+                });
+            },
+            { threshold: 0.12, rootMargin: '0px 0px -30px 0px' }
+        );
+        elementosReveal.forEach((el) => io.observe(el));
+    } else {
+        elementosReveal.forEach((el) => el.classList.add('visivel'));
+    }
+
+    // 3. Spotlight Holográfico que segue o cursor nos cards
+    document.querySelectorAll('.card, .contato-card').forEach((card) => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            card.style.setProperty('--mouse-x', `${e.clientX - rect.left}px`);
+            card.style.setProperty('--mouse-y', `${e.clientY - rect.top}px`);
+        });
+    });
+
+    // 4. Barra de Progresso de Scroll + Botão Voltar ao Topo + Menu Ativo (ScrollSpy)
+    const barraProgresso = document.getElementById('scroll-progress');
+    const btnTopo = document.getElementById('back-to-top');
+    const secoes = document.querySelectorAll('main section[id]');
+    const linksMenu = document.querySelectorAll('.topo__menu a[href^="#"]');
+
+    if (btnTopo) {
+        btnTopo.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
+
+    function atualizarScroll() {
+        const scrollY = window.scrollY;
+        const alturaTotal = document.documentElement.scrollHeight - window.innerHeight;
+        if (barraProgresso && alturaTotal > 0) {
+            barraProgresso.style.width = `${Math.min((scrollY / alturaTotal) * 100, 100)}%`;
+        }
+        if (btnTopo) {
+            btnTopo.classList.toggle('visivel', scrollY > 420);
+        }
+
+        let atual = 'home';
+        secoes.forEach((sec) => {
+            if (scrollY >= sec.offsetTop - 220) {
+                atual = sec.id;
+            }
+        });
+        linksMenu.forEach((a) => {
+            a.classList.toggle('ativo', a.getAttribute('href') === `#${atual}`);
+        });
+    }
+
+    window.addEventListener('scroll', atualizarScroll, { passive: true });
+    atualizarScroll();
 })();
 
 // ===== Automação GitHub Auto-Sync (@Ninjinha64 em tempo real) =====

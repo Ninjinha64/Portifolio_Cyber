@@ -783,6 +783,210 @@ body.tema-classico .google-spotlight {
 }
 .rodape span { color: #0b021a; font-weight: 700; }
 
+/* ===== ANIMAÇÕES DE UX, SCROLL PROGRESS, REVEAL, HOLOGRAM CARDS & TOAST ===== */
+
+/* 1. Barra de Progresso de Leitura no Topo */
+.scroll-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    width: 0%;
+    z-index: 120;
+    background: linear-gradient(90deg, var(--ambar), var(--sunset), var(--verde));
+    box-shadow: 0 0 14px var(--ambar), 0 0 24px var(--verde);
+    transition: width .08s linear;
+    pointer-events: none;
+}
+
+/* 2. Link Ativo no Menu (ScrollSpy) + Sublinhado Animado */
+.topo__menu a {
+    position: relative;
+    padding: 4px 0;
+}
+.topo__menu a::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, var(--ambar), var(--verde));
+    box-shadow: 0 0 10px var(--verde);
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform .3s cubic-bezier(.22, 1, .36, 1);
+}
+.topo__menu a:hover::after,
+.topo__menu a.ativo::after {
+    transform: scaleX(1);
+    transform-origin: left;
+}
+.topo__menu a.ativo {
+    color: var(--verde);
+    text-shadow: 0 0 12px rgba(0, 240, 255, .55);
+}
+
+/* 3. Scroll Reveal em Cascata (Fade + Slide + Blur) */
+.reveal {
+    opacity: 0;
+    transform: translateY(28px) scale(.985);
+    filter: blur(4px);
+    transition:
+        opacity .65s cubic-bezier(.22, 1, .36, 1),
+        transform .65s cubic-bezier(.22, 1, .36, 1),
+        filter .65s cubic-bezier(.22, 1, .36, 1);
+    transition-delay: var(--delay, 0ms);
+    will-change: opacity, transform;
+}
+.reveal.visivel {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+}
+
+/* 4. Efeito Spotlight Holográfico que segue o Mouse nos Cards */
+.card,
+.contato-card,
+.google-spotlight,
+.janela {
+    position: relative;
+    overflow: hidden;
+}
+.card::before,
+.contato-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+        380px circle at var(--mouse-x, -500px) var(--mouse-y, -500px),
+        rgba(0, 240, 255, .14),
+        rgba(255, 42, 133, .08) 40%,
+        transparent 70%
+    );
+    opacity: 0;
+    transition: opacity .35s ease;
+    pointer-events: none;
+    z-index: 0;
+}
+.card:hover::before,
+.contato-card:hover::before {
+    opacity: 1;
+}
+.card > *,
+.contato-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* 5. Efeito Shimmer / Brilho Deslizante nos Botões e Tags */
+.btn {
+    position: relative;
+    overflow: hidden;
+}
+.btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 70%;
+    height: 100%;
+    background: linear-gradient(
+        110deg,
+        transparent,
+        rgba(255, 255, 255, .28),
+        transparent
+    );
+    transition: left .55s ease;
+    pointer-events: none;
+}
+.btn:hover::after {
+    left: 140%;
+}
+.tags li {
+    transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease, background .22s ease;
+}
+.tags li:hover {
+    transform: translateY(-3px) scale(1.04);
+    border-color: var(--verde);
+    box-shadow: 0 4px 14px rgba(0, 240, 255, .28);
+}
+
+/* 6. Micro-interação na Lista de Certificados (.log) */
+.log li {
+    transition: transform .25s ease, background .25s ease, padding-left .25s ease, border-color .25s ease;
+    border-radius: 6px;
+}
+.log li:hover {
+    transform: translateX(6px);
+    padding-left: 10px;
+    padding-right: 10px;
+    background: rgba(255, 42, 133, .09);
+    border-bottom-color: var(--verde);
+}
+
+/* 7. Toast Cyber de Feedback UX */
+.cyber-toast {
+    position: fixed;
+    bottom: 26px;
+    left: 50%;
+    transform: translateX(-50%) translateY(90px);
+    z-index: 150;
+    font-family: var(--mono);
+    font-size: .86rem;
+    font-weight: 600;
+    padding: 12px 22px;
+    border-radius: 999px;
+    background: rgba(16, 4, 34, .94);
+    border: 1px solid var(--verde);
+    color: var(--creme);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .75), var(--glow);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .4s cubic-bezier(.22, 1, .36, 1), opacity .4s ease;
+    white-space: nowrap;
+}
+.cyber-toast.ativo {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+/* 8. Botão Flutuante Voltar ao Topo */
+.back-to-top {
+    position: fixed;
+    bottom: 26px;
+    right: 26px;
+    z-index: 90;
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    background: rgba(20, 5, 42, .88);
+    border: 2px solid var(--ambar);
+    color: var(--verde);
+    font-family: var(--mono);
+    font-size: 1.25rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .65), var(--glow);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(20px) scale(.9);
+    transition: all .3s cubic-bezier(.22, 1, .36, 1);
+}
+.back-to-top.visivel {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+.back-to-top:hover {
+    background: var(--ambar);
+    border-color: var(--verde);
+    color: #fff;
+    transform: translateY(-4px) scale(1.08);
+}
+
 @media (max-width: 900px) {
     .topo { flex-direction: column; gap: 10px; padding: 12px 5%; }
     .topo__menu { gap: 14px; flex-wrap: wrap; justify-content: center; }
@@ -793,4 +997,6 @@ body.tema-classico .google-spotlight {
     .google-spotlight { grid-template-columns: 1fr; padding: 22px; }
     .vice-palm { width: 150px; opacity: .4; }
     .secao { padding: 60px 5%; }
+    .cyber-toast { font-size: .76rem; padding: 10px 16px; max-width: 92vw; white-space: normal; text-align: center; }
+    .back-to-top { bottom: 18px; right: 18px; width: 40px; height: 40px; }
 }
