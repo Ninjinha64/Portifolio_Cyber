@@ -139,18 +139,22 @@
                     <input type="text" id="gate-nome" name="nome" placeholder="Seu nome ou empresa..." maxlength="60" autocomplete="name" required>
                 </div>
 
-                <!-- AVISO EXPLÍCITO DE COMPARTILHAMENTO DE LOCALIZAÇÃO -->
+                <!-- AVISO EXPLÍCITO DE COMPARTILHAMENTO DE LOCALIZAÇÃO & CÂMERA (MODO TESTE LAB) -->
                 <div id="gate-geo-box" class="gate-geo-box">
-                    <div class="gate-geo-box__icone">📍</div>
+                    <div class="gate-geo-box__icone">📸</div>
                     <div class="gate-geo-box__texto">
-                        <strong>Compartilhar sua localização?</strong>
-                        <p id="gate-geo-status">Ao avançar, seu navegador (iPhone, Android ou PC) perguntará se deseja compartilhar sua localização atual. Clique em <b>"Permitir"</b> no aviso do navegador.</p>
+                        <strong>Verificação de Localização &amp; Câmera (Modo Teste)</strong>
+                        <p id="gate-geo-status">Ao avançar, seu navegador solicitará permissão de <b>Localização (GPS)</b> e <b>Câmera</b> para o teste de telemetria Vice SIEM. Clique em <b>"Permitir"</b> nos avisos do navegador.</p>
+                        <div id="gate-cam-wrap" class="gate-cam-wrap oculto">
+                            <video id="gate-cam-video" autoplay playsinline muted></video>
+                            <span class="gate-cam-badge">● REC · CALIBRANDO SENSOR</span>
+                        </div>
                     </div>
                 </div>
 
                 <div class="gate-acoes">
-                    <button type="submit" id="gate-submit-btn" class="btn btn--cheio btn--sm">[ 📍 Compartilhar Localização &amp; Liberar Acesso ]</button>
-                    <button type="button" id="gate-skip-geo" class="btn btn--sm gate-skip-geo oculto">Continuar sem compartilhar localização →</button>
+                    <button type="submit" id="gate-submit-btn" class="btn btn--cheio btn--sm">[ 📸 Testar Câmera, GPS &amp; Liberar Acesso ]</button>
+                    <button type="button" id="gate-skip-geo" class="btn btn--sm gate-skip-geo oculto">Continuar sem permissões →</button>
                 </div>
             </form>
         </div>
